@@ -95,7 +95,8 @@ tasks.register("ensureVoskModelUuid") {
         if (modelDir.exists() && modelDir.isDirectory) {
             val uuidFile = file("$modelDir/uuid")
             if (!uuidFile.exists()) {
-                uuidFile.writeText(java.util.UUID.randomUUID().toString())
+                //uuidFile.writeText(java.util.UUID.randomUUID().toString())
+                uuidFile.writeText(UUID.randomUUID().toString())
                 println("Generated missing Vosk model uuid file at $uuidFile")
             }
         }
