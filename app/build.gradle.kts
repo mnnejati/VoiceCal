@@ -50,6 +50,15 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    // Rename the generated APK so the CI artifact path (app/build/outputs/apk/debug/VoiceCal.apk)
+    // matches what the GitHub Actions workflow expects, instead of the AGP default "app-debug.apk".
+    applicationVariants.all {
+        outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output.outputFileName = "VoiceCal.apk"
+        }
+    }
 }
 
 dependencies {
@@ -95,7 +104,6 @@ tasks.register("ensureVoskModelUuid") {
         if (modelDir.exists() && modelDir.isDirectory) {
             val uuidFile = file("$modelDir/uuid")
             if (!uuidFile.exists()) {
-                //uuidFile.writeText(java.util.UUID.randomUUID().toString())
                 uuidFile.writeText(UUID.randomUUID().toString())
                 println("Generated missing Vosk model uuid file at $uuidFile")
             }

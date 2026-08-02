@@ -122,6 +122,18 @@ fun SettingsDialog(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text("بین ۳ تا ۱۲۰ ثانیه؛ پیش‌فرض ۱۵ ثانیه.", fontSize = 11.sp, color = TextSecondary)
+
+                Spacer(Modifier.height(18.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(12.dp))
+
+                Text("درباره‌ی برنامه", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                Spacer(Modifier.height(6.dp))
+                Text("دستیار قرار ملاقات", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(2.dp))
+                Text("نسخه ۱.۰", fontSize = 11.5.sp, color = TextSecondary)
+                Spacer(Modifier.height(6.dp))
+                Text("توسعه‌دهنده: M.Nejati", fontSize = 12.5.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
             }
         },
         confirmButton = {

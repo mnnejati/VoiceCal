@@ -184,7 +184,15 @@ fun RecordScreen(
                     Text("نمایش قرار ملاقات‌ها", fontSize = 16.sp)
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    text = "Developed by M.Nejati",
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 10.5.sp
+                )
+
+                Spacer(Modifier.height(14.dp))
             }
         }
 
