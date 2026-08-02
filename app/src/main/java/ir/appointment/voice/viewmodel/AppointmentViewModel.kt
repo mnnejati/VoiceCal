@@ -12,6 +12,7 @@ import ir.appointment.voice.notification.ReminderScheduler
 import ir.appointment.voice.voice.AudioPlayerManager
 import ir.appointment.voice.voice.ExtractedAppointment
 import ir.appointment.voice.voice.OfflineVoskTranscriber
+import ir.appointment.voice.voice.GroqAppointmentExtractor
 import ir.appointment.voice.voice.GroqWhisperTranscriber
 import ir.appointment.voice.voice.PersianInfoExtractor
 import ir.appointment.voice.voice.VoiceCaptureEngine
@@ -59,8 +60,10 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     private val _playingId = MutableStateFlow<Long?>(null)
     val playingId: StateFlow<Long?> = _playingId
 
-    private val _userMessage = MutableStateFlow<String?>(null)
-    val userMessage: StateFlow<String?> = _userMessage
+    data class UserMessage(val text: String, val durationMillis: Long = 3000L)
+
+    private val _userMessage = MutableStateFlow<UserMessage?>(null)
+    val userMessage: StateFlow<UserMessage?> = _userMessage
 
     private val _editingAppointment = MutableStateFlow<AppointmentEntity?>(null)
     val editingAppointment: StateFlow<AppointmentEntity?> = _editingAppointment
@@ -70,6 +73,12 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _apiKey = MutableStateFlow(settings.groqApiKey)
     val apiKey: StateFlow<String> = _apiKey
+
+    private val _alarmSoundUri = MutableStateFlow(settings.alarmSoundUri)
+    val alarmSoundUri: StateFlow<String> = _alarmSoundUri
+
+    private val _alarmDurationSeconds = MutableStateFlow(settings.alarmDurationSeconds)
+    val alarmDurationSeconds: StateFlow<Int> = _alarmDurationSeconds
 
     private val undoJobs = mutableMapOf<Long, Job>()
 
@@ -82,6 +91,13 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         _apiKey.value = key
     }
 
+    fun updateAlarmSettings(soundUri: String, durationSeconds: Int) {
+        settings.alarmSoundUri = soundUri
+        settings.alarmDurationSeconds = durationSeconds
+        _alarmSoundUri.value = soundUri
+        _alarmDurationSeconds.value = settings.alarmDurationSeconds
+    }
+
     fun startRecording() {
         if (_recordingState.value != RecordingState.IDLE) return
 
@@ -90,7 +106,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         try {
             engine.start()
         } catch (e: Exception) {
-            _userMessage.value = "امکان دسترسی به میکروفون نبود. دوباره تلاش کنید."
+            _userMessage.value = UserMessage("امکان دسترسی به میکروفون نبود. دوباره تلاش کنید.")
             captureEngine = null
             return
         }
@@ -107,7 +123,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val audioPath = withContext(Dispatchers.IO) { engine?.stop() }
             if (audioPath == null) {
-                _userMessage.value = "صدایی ضبط نشد. دوباره امتحان کنید."
+                _userMessage.value = UserMessage("صدایی ضبط نشد. دوباره امتحان کنید.")
                 _recordingState.value = RecordingState.IDLE
                 return@launch
             }
@@ -117,7 +133,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
                     val key = _apiKey.value
                     if (key.isBlank()) {
                         _recordingState.value = RecordingState.IDLE
-                        _userMessage.value = "ابتدا از تنظیمات، کلید API رایگان Groq را وارد کنید."
+                        _userMessage.value = UserMessage("ابتدا از تنظیمات، کلید API رایگان Groq را وارد کنید.")
                         return@launch
                     }
                     withContext(Dispatchers.IO) { GroqWhisperTranscriber(key).transcribe(audioPath) }
@@ -134,25 +150,41 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
 
             val text = transcriptionResult.getOrNull().orEmpty()
             if (transcriptionResult.isFailure) {
-                _userMessage.value = transcriptionResult.exceptionOrNull()?.message ?: "خطای تشخیص گفتار."
+                _userMessage.value = UserMessage(transcriptionResult.exceptionOrNull()?.message ?: "خطای تشخیص گفتار.")
             }
 
             if (text.isNotBlank()) {
-                val extracted = PersianInfoExtractor.extract(text)
+                val extracted = extractAppointmentInfo(text)
                 if (extracted.jalaliYear == null && extracted.location == null &&
                     extracted.personName == null && extracted.displayTime == null
                 ) {
-                    _userMessage.value = "چیز قابل‌فهمی تشخیص داده نشد. لطفاً واضح‌تر و شامل تاریخ/ساعت/محل صحبت کنید."
+                    _userMessage.value = UserMessage("چیز قابل‌فهمی تشخیص داده نشد. لطفاً واضح‌تر و شامل تاریخ/ساعت/محل صحبت کنید.")
                 }
                 _pendingPreview.value = PendingPreview(extracted, audioPath)
             } else if (transcriptionResult.isSuccess) {
-                _userMessage.value = "صدایی شنیده نشد یا قابل‌تشخیص نبود. دوباره امتحان کنید."
+                _userMessage.value = UserMessage("صدایی شنیده نشد یا قابل‌تشخیص نبود. دوباره امتحان کنید.")
                 java.io.File(audioPath).delete()
             } else {
                 java.io.File(audioPath).delete()
             }
             _recordingState.value = RecordingState.IDLE
         }
+    }
+
+    /**
+     * Prefers the LLM-based extractor (much better at ordinals, relative dates, and
+     * telling locations apart from person names) whenever we're online with a Groq
+     * key configured. Falls back to the fully offline regex extractor on any
+     * failure (network error, malformed response, etc.) or when in offline mode.
+     */
+    private suspend fun extractAppointmentInfo(text: String): ExtractedAppointment {
+        if (_recognitionMode.value == RecognitionMode.ONLINE && _apiKey.value.isNotBlank()) {
+            val llmResult = withContext(Dispatchers.IO) {
+                GroqAppointmentExtractor(_apiKey.value).extract(text)
+            }
+            llmResult.getOrNull()?.let { return it }
+        }
+        return PersianInfoExtractor.extract(text)
     }
 
     /** Loads the offline model synchronously (suspended) the first time offline mode is used. */
@@ -166,7 +198,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
                             if (cont.isActive) cont.resume(state.model) { }
                         }
                         is VoskModelProvider.ModelState.Error -> {
-                            _userMessage.value = state.message
+                            _userMessage.value = UserMessage(state.message)
                             if (cont.isActive) cont.resume(null) { }
                         }
                         is VoskModelProvider.ModelState.Loading -> { /* wait for a terminal callback */ }
@@ -208,7 +240,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
                 )
             )
             _pendingPreview.value = null
-            _userMessage.value = "قرار ملاقات ذخیره شد."
+            _userMessage.value = UserMessage("قرار ملاقات ذخیره شد.", durationMillis = 900L)
 
             if (edited.sortTimestamp != null) {
                 val label = buildLabel(edited.displayDate, edited.displayTime, edited.location, edited.personName)
@@ -229,7 +261,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             repository.update(updated)
             _editingAppointment.value = null
-            _userMessage.value = "تغییرات ذخیره شد."
+            _userMessage.value = UserMessage("تغییرات ذخیره شد.", durationMillis = 900L)
 
             ReminderScheduler.cancel(getApplication(), updated.id)
             if (updated.sortTimestamp != null) {
@@ -286,7 +318,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
             _playingId.value = appointment.id
         } catch (e: Exception) {
             _playingId.value = null
-            _userMessage.value = "پخش فایل صوتی ممکن نشد."
+            _userMessage.value = UserMessage("پخش فایل صوتی ممکن نشد.")
         }
     }
 

@@ -42,11 +42,23 @@ object PersianInfoExtractor {
         "بیست و نه" to 29, "سی" to 30, "سی و یک" to 31
     )
 
+    // Ordinal day-of-month words: "هفتم شهریور" (the 7th of Shahrivar), "دوازدهم مرداد", etc.
+    private val ordinalDayNumbers = mapOf(
+        "یکم" to 1, "اول" to 1, "دوم" to 2, "سوم" to 3, "چهارم" to 4, "پنجم" to 5,
+        "ششم" to 6, "هفتم" to 7, "هشتم" to 8, "نهم" to 9, "دهم" to 10,
+        "یازدهم" to 11, "دوازدهم" to 12, "سیزدهم" to 13, "چهاردهم" to 14, "پانزدهم" to 15,
+        "شانزدهم" to 16, "هفدهم" to 17, "هجدهم" to 18, "نوزدهم" to 19, "بیستم" to 20,
+        "بیست و یکم" to 21, "بیست و دوم" to 22, "بیست و سوم" to 23, "بیست و چهارم" to 24,
+        "بیست و پنجم" to 25, "بیست و ششم" to 26, "بیست و هفتم" to 27, "بیست و هشتم" to 28,
+        "بیست و نهم" to 29, "سی ام" to 30, "سی‌ام" to 30, "سی و یکم" to 31
+    )
+
     fun extract(text: String): ExtractedAppointment {
         val normalized = normalizeDigits(text.trim())
 
         val person = extractAfterKeyword(normalized, listOf("با آقای", "با خانم", "با دکتر", "با"))
         val location = extractAfterKeyword(normalized, listOf("در محل", "در آدرس", "در"))
+            ?: extractLocationAfterGoVerb(normalized)
 
         val spokenWeekday = weekdays.firstOrNull { normalized.contains(it) }
 
@@ -59,10 +71,22 @@ object PersianInfoExtractor {
         val numericDateRegex = Regex("""(1[34]\d{2})[/\-](\d{1,2})[/\-](\d{1,2})""")
         val numericMatch = numericDateRegex.find(normalized)
 
-        // 2) "12 مرداد 1403" or "12 مرداد"
+        // 2) "12 مرداد 1403" or "12 مرداد" (numeric day)
         val monthNamePattern = jalaliMonths.joinToString("|")
         val dayMonthYearRegex = Regex("""(\d{1,2})\s*(?:ام)?\s*($monthNamePattern)(?:\s+(1[34]\d{2}))?""")
         val dayMonthMatch = dayMonthYearRegex.find(normalized)
+
+        // 2b) "هفتم شهریور" / "دوازدهم مرداد" (ordinal-word day, no digits)
+        val ordinalDayPattern = ordinalDayNumbers.keys.sortedByDescending { it.length }.joinToString("|")
+        val ordinalDayMonthRegex = Regex("""($ordinalDayPattern)\s+($monthNamePattern)(?:\s+(1[34]\d{2}))?""")
+        val ordinalDayMonthMatch = ordinalDayMonthRegex.find(normalized)
+
+        // 2c) "N روز دیگر" / "N روز بعد" (relative day offset, digit or word count)
+        val relativeDayDigitRegex = Regex("""(\d{1,2})\s*روز\s*(دیگر|بعد)""")
+        val relativeDayWordPattern = wordNumbers.keys.sortedByDescending { it.length }.joinToString("|")
+        val relativeDayWordRegex = Regex("""($relativeDayWordPattern)\s*روز\s*(دیگر|بعد)""")
+        val relativeDayDigitMatch = relativeDayDigitRegex.find(normalized)
+        val relativeDayWordMatch = relativeDayWordRegex.find(normalized)
 
         when {
             numericMatch != null -> {
@@ -74,6 +98,23 @@ object PersianInfoExtractor {
                 jd = dayMonthMatch.groupValues[1].toIntOrNull()
                 jm = jalaliMonths.indexOf(dayMonthMatch.groupValues[2]) + 1
                 jy = dayMonthMatch.groupValues[3].toIntOrNull()
+            }
+            ordinalDayMonthMatch != null -> {
+                jd = ordinalDayNumbers[ordinalDayMonthMatch.groupValues[1]]
+                jm = jalaliMonths.indexOf(ordinalDayMonthMatch.groupValues[2]) + 1
+                jy = ordinalDayMonthMatch.groupValues[3].toIntOrNull()
+            }
+            relativeDayDigitMatch != null -> {
+                val offset = relativeDayDigitMatch.groupValues[1].toIntOrNull() ?: 0
+                val (y, m, d) = PersianCalendar.todayJalali()
+                val shifted = shiftJalaliDay(y, m, d, offset)
+                jy = shifted.first; jm = shifted.second; jd = shifted.third
+            }
+            relativeDayWordMatch != null -> {
+                val offset = wordNumbers[relativeDayWordMatch.groupValues[1]] ?: 0
+                val (y, m, d) = PersianCalendar.todayJalali()
+                val shifted = shiftJalaliDay(y, m, d, offset)
+                jy = shifted.first; jm = shifted.second; jd = shifted.third
             }
             normalized.contains("پس فردا") || normalized.contains("پس‌فردا") -> {
                 val (y, m, d) = PersianCalendar.todayJalali()
@@ -194,27 +235,48 @@ object PersianInfoExtractor {
         )
     }
 
-    private fun extractAfterKeyword(text: String, keywords: List<String>): String? {
+    private fun extractAfterKeyword(text: String, keywords: List<String>, maxWords: Int = 2): String? {
         for (kw in keywords) {
-            val idx = text.indexOf(kw)
-            if (idx >= 0) {
-                val after = text.substring(idx + kw.length).trim()
-                if (after.isEmpty()) continue
-                // Take up to 4 words, stop at common stop-words/keywords
-                val stopWords = setOf("در", "با", "ساعت", "روز", "تاریخ", "فردا", "امروز", "پس‌فردا")
-                val words = after.split(Regex("\\s+"))
-                val collected = mutableListOf<String>()
-                for (w in words) {
-                    val clean = w.trim(',', '.', '،')
-                    if (clean.isEmpty()) continue
-                    if (stopWords.contains(clean)) break
-                    collected.add(clean)
-                    if (collected.size >= 4) break
+            var searchFrom = 0
+            while (true) {
+                val idx = text.indexOf(kw, searchFrom)
+                if (idx < 0) break
+
+                // Require real word boundaries so "با" doesn't match inside "باید", etc.
+                val precededByBoundary = idx == 0 || text[idx - 1].isWhitespace()
+                val followedByBoundary = idx + kw.length >= text.length || text[idx + kw.length].isWhitespace()
+                if (precededByBoundary && followedByBoundary) {
+                    val after = text.substring(idx + kw.length).trim()
+                    if (after.isNotEmpty()) {
+                        val stopWords = setOf(
+                            "در", "با", "ساعت", "روز", "تاریخ", "فردا", "امروز", "پس‌فردا",
+                            "باید", "برم", "بروم", "میرم", "می‌روم", "قراره", "قرار"
+                        )
+                        val words = after.split(Regex("\\s+"))
+                        val collected = mutableListOf<String>()
+                        for (w in words) {
+                            val clean = w.trim(',', '.', '،')
+                            if (clean.isEmpty()) continue
+                            if (stopWords.contains(clean)) break
+                            collected.add(clean)
+                            if (collected.size >= maxWords) break
+                        }
+                        if (collected.isNotEmpty()) return collected.joinToString(" ")
+                    }
                 }
-                if (collected.isNotEmpty()) return collected.joinToString(" ")
+                searchFrom = idx + kw.length
             }
         }
         return null
+    }
+
+    /**
+     * Fallback for location when no "در" keyword is present, e.g. "باید بروم دندانپزشکی":
+     * captures 1-2 words right after a "go to" verb, stopping before time/date words.
+     */
+    private fun extractLocationAfterGoVerb(text: String): String? {
+        val goVerbs = listOf("می‌روم", "میرم", "برم", "بروم", "می‌رم")
+        return extractAfterKeyword(text, goVerbs, maxWords = 2)
     }
 
     private fun normalizeDigits(input: String): String {

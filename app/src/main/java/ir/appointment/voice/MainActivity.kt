@@ -1,10 +1,14 @@
 package ir.appointment.voice
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -23,6 +27,8 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: AppointmentViewModel by viewModels()
 
+    private var onRingtonePicked: ((String) -> Unit)? = null
+
     private val requestMicPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* result handled reactively via hasMicPermission() check below */ }
@@ -30,6 +36,26 @@ class MainActivity : ComponentActivity() {
     private val requestNotificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* reminders simply won't show a notification if denied; recording still works */ }
+
+    private val pickRingtoneLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        onRingtonePicked?.invoke(uri?.toString() ?: "")
+    }
+
+    private fun launchRingtonePicker(currentUri: String, onPicked: (String) -> Unit) {
+        onRingtonePicked = onPicked
+        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            if (currentUri.isNotBlank()) {
+                putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(currentUri))
+            }
+        }
+        pickRingtoneLauncher.launch(intent)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,12 +76,16 @@ class MainActivity : ComponentActivity() {
                             requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
                             micGranted = hasMicPermission()
                         },
-                        onShowAppointments = { screen = Screen.LIST }
+                        onShowAppointments = { screen = Screen.LIST },
+                        onPickAlarmSound = { current, onPicked -> launchRingtonePicker(current, onPicked) }
                     )
-                    Screen.LIST -> AppointmentListScreen(
-                        viewModel = viewModel,
-                        onBack = { screen = Screen.RECORD }
-                    )
+                    Screen.LIST -> {
+                        BackHandler { screen = Screen.RECORD }
+                        AppointmentListScreen(
+                            viewModel = viewModel,
+                            onBack = { screen = Screen.RECORD }
+                        )
+                    }
                 }
             }
         }

@@ -31,8 +31,24 @@ class SettingsStore(context: Context) {
             prefs.edit().putString(KEY_API_KEY, value.trim()).apply()
         }
 
+    /** Empty string means "use the system default alarm sound". */
+    var alarmSoundUri: String
+        get() = prefs.getString(KEY_ALARM_SOUND, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_ALARM_SOUND, value).apply()
+        }
+
+    /** How long the alarm sound rings for when a reminder fires. */
+    var alarmDurationSeconds: Int
+        get() = prefs.getInt(KEY_ALARM_DURATION, 15)
+        set(value) {
+            prefs.edit().putInt(KEY_ALARM_DURATION, value.coerceIn(3, 120)).apply()
+        }
+
     companion object {
         private const val KEY_MODE = "recognition_mode"
         private const val KEY_API_KEY = "groq_api_key"
+        private const val KEY_ALARM_SOUND = "alarm_sound_uri"
+        private const val KEY_ALARM_DURATION = "alarm_duration_seconds"
     }
 }

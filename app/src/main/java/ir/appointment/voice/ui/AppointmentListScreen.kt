@@ -45,8 +45,18 @@ fun AppointmentListScreen(
     val appointments by viewModel.appointments.collectAsState()
     val playingId by viewModel.playingId.collectAsState()
     val editingAppointment by viewModel.editingAppointment.collectAsState()
+    val userMessage by viewModel.userMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(userMessage) {
+        val msg = userMessage ?: return@LaunchedEffect
+        val job = launch { snackbarHostState.showSnackbar(msg.text) }
+        kotlinx.coroutines.delay(msg.durationMillis)
+        snackbarHostState.currentSnackbarData?.dismiss()
+        job.join()
+        viewModel.consumeUserMessage()
+    }
 
     fun handleDelete(appointment: AppointmentEntity) {
         viewModel.requestDelete(appointment)
@@ -215,20 +225,23 @@ private fun AppointmentRow(
                             color = TextSecondary
                         )
                     }
-                    Spacer(Modifier.weight(1f))
-                    if (!appointment.displayTime.isNullOrBlank()) {
-                        Surface(
-                            color = VividPurple.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = appointment.displayTime,
-                                color = VividPurple,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
+                }
+
+                if (!appointment.displayTime.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Surface(
+                        color = VividPurple.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.wrapContentWidth()
+                    ) {
+                        Text(
+                            text = appointment.displayTime,
+                            color = VividPurple,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
                     }
                 }
 

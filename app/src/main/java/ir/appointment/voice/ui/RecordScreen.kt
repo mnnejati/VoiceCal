@@ -27,27 +27,34 @@ import ir.appointment.voice.ui.theme.DeepIndigo
 import ir.appointment.voice.ui.theme.VividPurple
 import ir.appointment.voice.viewmodel.AppointmentViewModel
 import ir.appointment.voice.viewmodel.RecordingState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun RecordScreen(
     viewModel: AppointmentViewModel,
     hasMicPermission: Boolean,
     onRequestPermission: () -> Unit,
-    onShowAppointments: () -> Unit
+    onShowAppointments: () -> Unit,
+    onPickAlarmSound: (current: String, onPicked: (String) -> Unit) -> Unit
 ) {
     val recordingState by viewModel.recordingState.collectAsState()
     val preview by viewModel.pendingPreview.collectAsState()
     val userMessage by viewModel.userMessage.collectAsState()
     val recognitionMode by viewModel.recognitionMode.collectAsState()
     val apiKey by viewModel.apiKey.collectAsState()
+    val alarmSoundUri by viewModel.alarmSoundUri.collectAsState()
+    val alarmDurationSeconds by viewModel.alarmDurationSeconds.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSettings by remember { mutableStateOf(false) }
 
     LaunchedEffect(userMessage) {
-        userMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.consumeUserMessage()
-        }
+        val msg = userMessage ?: return@LaunchedEffect
+        val job = launch { snackbarHostState.showSnackbar(msg.text) }
+        delay(msg.durationMillis)
+        snackbarHostState.currentSnackbarData?.dismiss()
+        job.join()
+        viewModel.consumeUserMessage()
     }
 
     Box(
@@ -85,7 +92,7 @@ fun RecordScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = if (recognitionMode == RecognitionMode.ONLINE) "حالت: آنلاین (OpenAI)" else "حالت: آفلاین (Vosk)",
+                    text = if (recognitionMode == RecognitionMode.ONLINE) "حالت: آنلاین (Groq)" else "حالت: آفلاین (Vosk)",
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 11.sp
                 )
@@ -199,8 +206,12 @@ fun RecordScreen(
         SettingsDialog(
             currentMode = recognitionMode,
             currentApiKey = apiKey,
-            onSave = { mode, key ->
+            currentAlarmSoundUri = alarmSoundUri,
+            currentAlarmDurationSeconds = alarmDurationSeconds,
+            onPickAlarmSound = onPickAlarmSound,
+            onSave = { mode, key, soundUri, durationSeconds ->
                 viewModel.updateSettings(mode, key)
+                viewModel.updateAlarmSettings(soundUri, durationSeconds)
                 showSettings = false
             },
             onDismiss = { showSettings = false }
