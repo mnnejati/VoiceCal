@@ -15,6 +15,8 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
         if (appointmentId < 0) return
 
         val settings = SettingsStore(context)
+        if (!settings.alarmEnabled) return
+
         val serviceIntent = Intent(context, AlarmSoundService::class.java).apply {
             putExtra(AlarmSoundService.EXTRA_TITLE, "یادآوری قرار ملاقات")
             putExtra(AlarmSoundService.EXTRA_TEXT, label)

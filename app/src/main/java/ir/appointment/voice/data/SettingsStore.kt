@@ -45,10 +45,18 @@ class SettingsStore(context: Context) {
             prefs.edit().putInt(KEY_ALARM_DURATION, value.coerceIn(3, 120)).apply()
         }
 
+    /** Master on/off switch for reminders. When false, no alarm/notification fires at all. */
+    var alarmEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ALARM_ENABLED, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ALARM_ENABLED, value).apply()
+        }
+
     companion object {
         private const val KEY_MODE = "recognition_mode"
         private const val KEY_API_KEY = "groq_api_key"
         private const val KEY_ALARM_SOUND = "alarm_sound_uri"
         private const val KEY_ALARM_DURATION = "alarm_duration_seconds"
+        private const val KEY_ALARM_ENABLED = "alarm_enabled"
     }
 }

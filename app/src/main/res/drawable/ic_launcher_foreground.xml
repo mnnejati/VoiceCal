@@ -4,13 +4,28 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,30 C60,30 65,35 65,41 L65,55 C65,61 60,66 54,66 C48,66 43,61 43,55 L43,41 C43,35 48,30 54,30 Z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,52 L44,52 L44,55 C44,63 48.5,69 54,69 C59.5,69 64,63 64,55 L64,52 L70,52 L70,55 C70,65 63,73 56,74.5 L56,80 L52,80 L52,74.5 C45,73 38,65 38,55 Z" />
-    <path
-        android:fillColor="#12B8A6"
-        android:pathData="M30,84 L78,84 L78,90 L30,90 Z" />
+
+    <!-- Calendar binder tabs -->
+    <path android:fillColor="#FFFFFF" android:pathData="M36,25h6v11h-6z" android:fillAlpha="0.9" />
+    <path android:fillColor="#FFFFFF" android:pathData="M66,25h6v11h-6z" android:fillAlpha="0.9" />
+
+    <!-- Calendar body -->
+    <path android:fillColor="#FFFFFF" android:pathData="M25,34h58v55h-58z" />
+
+    <!-- Calendar header strip -->
+    <path android:fillColor="#12B8A6" android:pathData="M25,34h58v13h-58z" />
+
+    <!-- Day grid dots -->
+    <path android:fillColor="#6C4CE0" android:pathData="M33,55h8v8h-8z" />
+    <path android:fillColor="#6C4CE0" android:pathData="M50,55h8v8h-8z" />
+    <path android:fillColor="#6C4CE0" android:pathData="M67,55h8v8h-8z" />
+    <path android:fillColor="#D7CFF5" android:pathData="M33,70h8v8h-8z" />
+    <path android:fillColor="#D7CFF5" android:pathData="M50,70h8v8h-8z" />
+    <path android:fillColor="#6C4CE0" android:pathData="M67,70h8v8h-8z" />
+
+    <!-- Voice / waveform badge -->
+    <path android:fillColor="#12B8A6" android:pathData="M64,79 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0 z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M74,74h3v10h-3z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M78.5,68h3v22h-3z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M83,74h3v10h-3z" />
 </vector>

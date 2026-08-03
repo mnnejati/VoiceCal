@@ -16,6 +16,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ir.appointment.voice.BuildConfig
 import ir.appointment.voice.data.RecognitionMode
 import ir.appointment.voice.ui.theme.AccentTeal
 import ir.appointment.voice.ui.theme.TextSecondary
@@ -24,14 +25,16 @@ import ir.appointment.voice.ui.theme.TextSecondary
 fun SettingsDialog(
     currentMode: RecognitionMode,
     currentApiKey: String,
+    currentAlarmEnabled: Boolean,
     currentAlarmSoundUri: String,
     currentAlarmDurationSeconds: Int,
     onPickAlarmSound: (current: String, onPicked: (String) -> Unit) -> Unit,
-    onSave: (RecognitionMode, String, String, Int) -> Unit,
+    onSave: (RecognitionMode, String, Boolean, String, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     var mode by remember { mutableStateOf(currentMode) }
     var apiKey by remember { mutableStateOf(currentApiKey) }
+    var alarmEnabled by remember { mutableStateOf(currentAlarmEnabled) }
     var alarmSoundUri by remember { mutableStateOf(currentAlarmSoundUri) }
     var alarmDurationText by remember { mutableStateOf(currentAlarmDurationSeconds.toString()) }
 
@@ -97,31 +100,47 @@ fun SettingsDialog(
                 HorizontalDivider()
                 Spacer(Modifier.height(12.dp))
 
-                Text("آلارم یادآوری", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
-                Spacer(Modifier.height(6.dp))
-
-                OutlinedButton(
-                    onClick = {
-                        onPickAlarmSound(alarmSoundUri) { picked -> alarmSoundUri = picked }
-                    },
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Filled.MusicNote, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (alarmSoundUri.isBlank()) "انتخاب آهنگ آلارم (پیش‌فرض سیستم)" else "تغییر آهنگ آلارم")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("آلارم یادآوری", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                        Text(
+                            if (alarmEnabled) "فعال" else "غیرفعال — هیچ یادآوری‌ای نمایش داده نمی‌شود",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
+                    Switch(checked = alarmEnabled, onCheckedChange = { alarmEnabled = it })
                 }
 
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = alarmDurationText,
-                    onValueChange = { alarmDurationText = it.filter(Char::isDigit).take(3) },
-                    label = { Text("مدت زمان پخش آلارم (ثانیه)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(4.dp))
-                Text("بین ۳ تا ۱۲۰ ثانیه؛ پیش‌فرض ۱۵ ثانیه.", fontSize = 11.sp, color = TextSecondary)
+                if (alarmEnabled) {
+                    Spacer(Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            onPickAlarmSound(alarmSoundUri) { picked -> alarmSoundUri = picked }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.MusicNote, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (alarmSoundUri.isBlank()) "انتخاب آهنگ آلارم (پیش‌فرض سیستم)" else "تغییر آهنگ آلارم")
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = alarmDurationText,
+                        onValueChange = { alarmDurationText = it.filter(Char::isDigit).take(3) },
+                        label = { Text("مدت زمان پخش آلارم (ثانیه)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text("بین ۳ تا ۱۲۰ ثانیه؛ پیش‌فرض ۱۵ ثانیه.", fontSize = 11.sp, color = TextSecondary)
+                }
 
                 Spacer(Modifier.height(18.dp))
                 HorizontalDivider()
@@ -131,7 +150,7 @@ fun SettingsDialog(
                 Spacer(Modifier.height(6.dp))
                 Text("دستیار قرار ملاقات", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(2.dp))
-                Text("نسخه ۱.۰", fontSize = 11.5.sp, color = TextSecondary)
+                Text("نسخه ۱.۰  •  آخرین بیلد: ${BuildConfig.BUILD_DATE}", fontSize = 11.5.sp, color = TextSecondary)
                 Spacer(Modifier.height(6.dp))
                 Text("توسعه‌دهنده: M.Nejati", fontSize = 12.5.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
             }
@@ -139,7 +158,7 @@ fun SettingsDialog(
         confirmButton = {
             TextButton(onClick = {
                 val duration = alarmDurationText.toIntOrNull()?.coerceIn(3, 120) ?: 15
-                onSave(mode, apiKey, alarmSoundUri, duration)
+                onSave(mode, apiKey, alarmEnabled, alarmSoundUri, duration)
             }) {
                 Text("ذخیره", color = AccentTeal, fontWeight = FontWeight.Bold)
             }

@@ -30,6 +30,11 @@ object PersianInfoExtractor {
 
     private val weekdays = listOf("شنبه", "یکشنبه", "دوشنبه", "سه شنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "پنج شنبه", "پنج‌شنبه", "جمعه")
 
+    private val weekdayIndex = mapOf(
+        "شنبه" to 0, "یکشنبه" to 1, "دوشنبه" to 2, "سه شنبه" to 3, "سه‌شنبه" to 3,
+        "چهارشنبه" to 4, "پنجشنبه" to 5, "پنج شنبه" to 5, "پنج‌شنبه" to 5, "جمعه" to 6
+    )
+
     private val jalaliMonths = PersianCalendar.jalaliMonthNames
 
     private val wordNumbers = mapOf(
@@ -132,6 +137,18 @@ object PersianInfoExtractor {
                 val (y, m, d) = PersianCalendar.todayJalali()
                 jy = y; jm = m; jd = d
                 displayDate = "امروز"
+            }
+            spokenWeekday != null -> {
+                val targetIdx = weekdayIndex[spokenWeekday]
+                if (targetIdx != null) {
+                    val (ty, tm, td) = PersianCalendar.todayJalali()
+                    val todayName = PersianCalendar.weekdayName(ty, tm, td)
+                    val todayIdx = weekdayIndex[todayName] ?: 0
+                    var offset = (targetIdx - todayIdx + 7) % 7
+                    if (offset == 0) offset = 7 // "سه‌شنبه" alone means the upcoming one, not today
+                    val shifted = shiftJalaliDay(ty, tm, td, offset)
+                    jy = shifted.first; jm = shifted.second; jd = shifted.third
+                }
             }
         }
 

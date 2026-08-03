@@ -1,3 +1,6 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 plugins {
@@ -16,6 +19,12 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // Auto-populated with the actual date this APK was built, so the "About"
+        // screen can always show an accurate "last updated" date without
+        // needing a manual edit before every release.
+        val buildDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        buildConfigField("String", "BUILD_DATE", "\"$buildDate\"")
     }
 
     buildTypes {
@@ -36,6 +45,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

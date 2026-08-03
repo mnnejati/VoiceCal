@@ -45,6 +45,7 @@ fun RecordScreen(
     val apiKey by viewModel.apiKey.collectAsState()
     val alarmSoundUri by viewModel.alarmSoundUri.collectAsState()
     val alarmDurationSeconds by viewModel.alarmDurationSeconds.collectAsState()
+    val alarmEnabled by viewModel.alarmEnabled.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSettings by remember { mutableStateOf(false) }
 
@@ -214,12 +215,13 @@ fun RecordScreen(
         SettingsDialog(
             currentMode = recognitionMode,
             currentApiKey = apiKey,
+            currentAlarmEnabled = alarmEnabled,
             currentAlarmSoundUri = alarmSoundUri,
             currentAlarmDurationSeconds = alarmDurationSeconds,
             onPickAlarmSound = onPickAlarmSound,
-            onSave = { mode, key, soundUri, durationSeconds ->
+            onSave = { mode, key, enabled, soundUri, durationSeconds ->
                 viewModel.updateSettings(mode, key)
-                viewModel.updateAlarmSettings(soundUri, durationSeconds)
+                viewModel.updateAlarmSettings(enabled, soundUri, durationSeconds)
                 showSettings = false
             },
             onDismiss = { showSettings = false }

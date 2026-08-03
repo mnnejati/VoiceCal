@@ -14,6 +14,7 @@ import ir.appointment.voice.voice.ExtractedAppointment
 import ir.appointment.voice.voice.OfflineVoskTranscriber
 import ir.appointment.voice.voice.GroqAppointmentExtractor
 import ir.appointment.voice.voice.GroqWhisperTranscriber
+import ir.appointment.voice.voice.PersianCalendar
 import ir.appointment.voice.voice.PersianInfoExtractor
 import ir.appointment.voice.voice.VoiceCaptureEngine
 import ir.appointment.voice.voice.VoskModelProvider
@@ -80,6 +81,9 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     private val _alarmDurationSeconds = MutableStateFlow(settings.alarmDurationSeconds)
     val alarmDurationSeconds: StateFlow<Int> = _alarmDurationSeconds
 
+    private val _alarmEnabled = MutableStateFlow(settings.alarmEnabled)
+    val alarmEnabled: StateFlow<Boolean> = _alarmEnabled
+
     private val undoJobs = mutableMapOf<Long, Job>()
 
     data class PendingPreview(val extracted: ExtractedAppointment, val audioFilePath: String)
@@ -91,9 +95,11 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         _apiKey.value = key
     }
 
-    fun updateAlarmSettings(soundUri: String, durationSeconds: Int) {
+    fun updateAlarmSettings(enabled: Boolean, soundUri: String, durationSeconds: Int) {
+        settings.alarmEnabled = enabled
         settings.alarmSoundUri = soundUri
         settings.alarmDurationSeconds = durationSeconds
+        _alarmEnabled.value = enabled
         _alarmSoundUri.value = soundUri
         _alarmDurationSeconds.value = settings.alarmDurationSeconds
     }
@@ -172,19 +178,54 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /**
-     * Prefers the LLM-based extractor (much better at ordinals, relative dates, and
-     * telling locations apart from person names) whenever we're online with a Groq
-     * key configured. Falls back to the fully offline regex extractor on any
-     * failure (network error, malformed response, etc.) or when in offline mode.
+     * Combines the LLM-based extractor (great at ordinals, relative dates, and
+     * telling locations apart from person names) with the regex extractor
+     * (fully offline, catches things the LLM occasionally misses) into one
+     * hybrid result: for each field, the LLM's value wins if present, and any
+     * field the LLM left null is filled in from the regex pass instead of
+     * being dropped. In OFFLINE mode, or if the LLM call fails entirely, only
+     * the regex result is used.
      */
     private suspend fun extractAppointmentInfo(text: String): ExtractedAppointment {
-        if (_recognitionMode.value == RecognitionMode.ONLINE && _apiKey.value.isNotBlank()) {
-            val llmResult = withContext(Dispatchers.IO) {
-                GroqAppointmentExtractor(_apiKey.value).extract(text)
-            }
-            llmResult.getOrNull()?.let { return it }
+        val regexResult = PersianInfoExtractor.extract(text)
+
+        if (_recognitionMode.value != RecognitionMode.ONLINE || _apiKey.value.isBlank()) {
+            return regexResult
         }
-        return PersianInfoExtractor.extract(text)
+
+        val llmResult = withContext(Dispatchers.IO) {
+            GroqAppointmentExtractor(_apiKey.value).extract(text)
+        }.getOrNull() ?: return regexResult
+
+        val jy = llmResult.jalaliYear ?: regexResult.jalaliYear
+        val jm = llmResult.jalaliMonth ?: regexResult.jalaliMonth
+        val jd = llmResult.jalaliDay ?: regexResult.jalaliDay
+        val hour = llmResult.hour ?: regexResult.hour
+        val minute = llmResult.minute ?: regexResult.minute
+        val location = llmResult.location ?: regexResult.location
+        val person = llmResult.personName ?: regexResult.personName
+
+        val weekday = if (jy != null && jm != null && jd != null) PersianCalendar.weekdayName(jy, jm, jd) else null
+        val displayDate = if (jy != null && jm != null && jd != null) {
+            "$jd ${PersianCalendar.jalaliMonthNames.getOrNull(jm - 1) ?: ""} $jy"
+        } else null
+        val displayTime = if (hour != null) String.format("%02d:%02d", hour, minute ?: 0) else null
+        val sortTs = if (jy != null && jm != null && jd != null) PersianCalendar.toEpochMillis(jy, jm, jd, hour, minute) else null
+
+        return ExtractedAppointment(
+            rawText = text,
+            personName = person,
+            location = location,
+            jalaliYear = jy,
+            jalaliMonth = jm,
+            jalaliDay = jd,
+            weekdayName = weekday,
+            hour = hour,
+            minute = minute,
+            displayDate = displayDate,
+            displayTime = displayTime,
+            sortTimestamp = sortTs
+        )
     }
 
     /** Loads the offline model synchronously (suspended) the first time offline mode is used. */
