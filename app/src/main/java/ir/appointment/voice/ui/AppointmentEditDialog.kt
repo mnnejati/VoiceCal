@@ -39,8 +39,12 @@ fun AppointmentEditDialog(
         val jd = day.trim().toIntOrNull()
         val jm = if (monthIndex in 0..11) monthIndex + 1 else null
         val jy = year.trim().toIntOrNull()
-        val h = hour.trim().toIntOrNull()
-        val m = minute.trim().toIntOrNull()
+        val minuteVal = minute.trim().toIntOrNull()
+        val hourVal = hour.trim().toIntOrNull()
+        // Only default the hour to 0 when a minute WAS given but the hour field was
+        // left blank — if both are empty, that means "no time set", not midnight.
+        val h = hourVal ?: if (minuteVal != null) 0 else null
+        val m = minuteVal
 
         val weekday = if (jy != null && jm != null && jd != null) PersianCalendar.weekdayName(jy, jm, jd) else null
         val displayDate = if (jy != null && jm != null && jd != null) {

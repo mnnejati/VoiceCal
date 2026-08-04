@@ -27,6 +27,22 @@ android {
         buildConfigField("String", "BUILD_DATE", "\"$buildDate\"")
     }
 
+    // AGP normally auto-generates ~/.android/debug.keystore on first use, but on
+    // GitHub Actions each run gets a brand-new machine, so a NEW random debug key
+    // would be generated every single build. That means every APK would be signed
+    // differently, and Android refuses to install an "update" over an existing app
+    // with a different signature — forcing an uninstall before every reinstall.
+    // Using a fixed, checked-in debug keystore instead means every build (local or
+    // CI) is signed identically, so new builds always install cleanly as updates.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

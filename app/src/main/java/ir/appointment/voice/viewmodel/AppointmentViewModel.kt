@@ -190,12 +190,12 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         val regexResult = PersianInfoExtractor.extract(text)
 
         if (_recognitionMode.value != RecognitionMode.ONLINE || _apiKey.value.isBlank()) {
-            return regexResult
+            return rejectPastDate(regexResult)
         }
 
         val llmResult = withContext(Dispatchers.IO) {
             GroqAppointmentExtractor(_apiKey.value).extract(text)
-        }.getOrNull() ?: return regexResult
+        }.getOrNull() ?: return rejectPastDate(regexResult)
 
         val jy = llmResult.jalaliYear ?: regexResult.jalaliYear
         val jm = llmResult.jalaliMonth ?: regexResult.jalaliMonth
@@ -212,19 +212,53 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         val displayTime = if (hour != null) String.format("%02d:%02d", hour, minute ?: 0) else null
         val sortTs = if (jy != null && jm != null && jd != null) PersianCalendar.toEpochMillis(jy, jm, jd, hour, minute) else null
 
-        return ExtractedAppointment(
-            rawText = text,
-            personName = person,
-            location = location,
-            jalaliYear = jy,
-            jalaliMonth = jm,
-            jalaliDay = jd,
-            weekdayName = weekday,
-            hour = hour,
-            minute = minute,
-            displayDate = displayDate,
-            displayTime = displayTime,
-            sortTimestamp = sortTs
+        return rejectPastDate(
+            ExtractedAppointment(
+                rawText = text,
+                personName = person,
+                location = location,
+                jalaliYear = jy,
+                jalaliMonth = jm,
+                jalaliDay = jd,
+                weekdayName = weekday,
+                hour = hour,
+                minute = minute,
+                displayDate = displayDate,
+                displayTime = displayTime,
+                sortTimestamp = sortTs
+            )
+        )
+    }
+
+    /**
+     * Users don't usually dictate an appointment that's already in the past, so a
+     * resolved date earlier than today is almost certainly a misrecognition (wrong
+     * year carried over, ordinal misheard, etc). In that case we drop just the date
+     * fields (keep time/location/person, which are still likely correct) so the
+     * user fills the date in manually in the preview instead of silently saving a
+     * wrong date. Comparison is at day granularity — an earlier time TODAY is fine.
+     */
+    private fun rejectPastDate(extracted: ExtractedAppointment): ExtractedAppointment {
+        val jy = extracted.jalaliYear
+        val jm = extracted.jalaliMonth
+        val jd = extracted.jalaliDay
+        if (jy == null || jm == null || jd == null) return extracted
+
+        val today = PersianCalendar.todayJalali()
+        val candidateNum = jy * 10000 + jm * 100 + jd
+        val todayNum = today.first * 10000 + today.second * 100 + today.third
+        if (candidateNum >= todayNum) return extracted
+
+        _userMessage.value = UserMessage(
+            "تاریخ تشخیص‌داده‌شده در گذشته بود، پس نادیده گرفته شد — لطفاً تاریخ درست را دستی وارد کنید."
+        )
+        return extracted.copy(
+            jalaliYear = null,
+            jalaliMonth = null,
+            jalaliDay = null,
+            weekdayName = null,
+            displayDate = null,
+            sortTimestamp = null
         )
     }
 

@@ -7,6 +7,8 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -44,6 +46,10 @@ class MainActivity : ComponentActivity() {
         onRingtonePicked?.invoke(uri?.toString() ?: "")
     }
 
+    private val requestIgnoreBatteryOptimizations = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { /* whether granted or not, nothing else to do here */ }
+
     private fun launchRingtonePicker(currentUri: String, onPicked: (String) -> Unit) {
         onRingtonePicked = onPicked
         val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
@@ -55,6 +61,30 @@ class MainActivity : ComponentActivity() {
             }
         }
         pickRingtoneLauncher.launch(intent)
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        val pm = getSystemService(PowerManager::class.java) ?: return true
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    /** Many OEM Android skins (Xiaomi, Huawei, Samsung, etc.) aggressively kill
+     * background alarms/services unless the app is exempted from battery
+     * optimization — this is one of the most common reasons a scheduled reminder
+     * silently never fires. Shows the system's own consent dialog. */
+    @Suppress("BatteryLife")
+    private fun requestBatteryOptimizationExemption() {
+        if (isIgnoringBatteryOptimizations()) return
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            requestIgnoreBatteryOptimizations.launch(intent)
+        } catch (_: Exception) {
+            // Some OEMs block this intent entirely; nothing more we can do
+            // programmatically, the user would need to allow it manually from
+            // the phone's own battery settings.
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,7 +107,9 @@ class MainActivity : ComponentActivity() {
                             micGranted = hasMicPermission()
                         },
                         onShowAppointments = { screen = Screen.LIST },
-                        onPickAlarmSound = { current, onPicked -> launchRingtonePicker(current, onPicked) }
+                        onPickAlarmSound = { current, onPicked -> launchRingtonePicker(current, onPicked) },
+                        isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations(),
+                        onRequestIgnoreBatteryOptimizations = { requestBatteryOptimizationExemption() }
                     )
                     Screen.LIST -> {
                         BackHandler { screen = Screen.RECORD }

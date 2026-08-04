@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.appointment.voice.data.AppointmentEntity
 import ir.appointment.voice.ui.theme.AccentTeal
-import ir.appointment.voice.ui.theme.BackgroundLight
 import ir.appointment.voice.ui.theme.DangerRed
 import ir.appointment.voice.ui.theme.SurfaceWhite
 import ir.appointment.voice.ui.theme.TextPrimary
@@ -48,6 +47,7 @@ fun AppointmentListScreen(
     val userMessage by viewModel.userMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var selectedTab by remember { mutableStateOf(0) } // 0 = آینده, 1 = گذشته
 
     LaunchedEffect(userMessage) {
         val msg = userMessage ?: return@LaunchedEffect
@@ -72,35 +72,67 @@ fun AppointmentListScreen(
         }
     }
 
+    val (upcoming, past) = remember(appointments) {
+        val now = System.currentTimeMillis()
+        val upcomingList = appointments.filter { it.sortTimestamp == null || it.sortTimestamp >= now }
+        val pastList = appointments
+            .filter { it.sortTimestamp != null && it.sortTimestamp < now }
+            .sortedByDescending { it.sortTimestamp } // most recently-passed first
+        upcomingList to pastList
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("قرار ملاقات‌ها", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "بازگشت")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = VividPurple,
-                    titleContentColor = SurfaceWhite,
-                    navigationIconContentColor = SurfaceWhite
+            Column {
+                TopAppBar(
+                    title = { Text("قرار ملاقات‌ها", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "بازگشت")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = VividPurple,
+                        titleContentColor = SurfaceWhite,
+                        navigationIconContentColor = SurfaceWhite
+                    )
                 )
-            )
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = VividPurple,
+                    contentColor = SurfaceWhite
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("آینده (${upcoming.size})") }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("گذشته (${past.size})") }
+                    )
+                }
+            }
         }
     ) { padding ->
-        if (appointments.isEmpty()) {
+        val visibleList = if (selectedTab == 0) upcoming else past
+
+        if (visibleList.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("هنوز قرار ملاقاتی ثبت نشده است", color = TextSecondary, fontSize = 16.sp)
+                Text(
+                    if (selectedTab == 0) "هنوز قرار ملاقاتی ثبت نشده است" else "قرار گذشته‌ای وجود ندارد",
+                    color = TextSecondary,
+                    fontSize = 16.sp
+                )
             }
-        } else {
-            val grouped = remember(appointments) { groupByDateSection(appointments) }
-
+        } else if (selectedTab == 0) {
+            val grouped = remember(upcoming) { groupByDateSection(upcoming) }
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 16.dp)
@@ -113,12 +145,7 @@ fun AppointmentListScreen(
                                 .background(MaterialTheme.colorScheme.background)
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
-                            Text(
-                                text = sectionTitle,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = VividPurple
-                            )
+                            Text(text = sectionTitle, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = VividPurple)
                         }
                     }
                     items(rows, key = { it.id }) { appointment ->
@@ -131,6 +158,25 @@ fun AppointmentListScreen(
                                 onDeleteRequest = { handleDelete(appointment) }
                             )
                         }
+                    }
+                }
+            }
+        } else {
+            // Past tab: simple flat list, most recently-passed appointment first.
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(vertical = 10.dp)
+            ) {
+                items(past, key = { it.id }) { appointment ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        AppointmentRow(
+                            appointment = appointment,
+                            isPlaying = playingId == appointment.id,
+                            onPlayToggle = { viewModel.togglePlay(appointment) },
+                            onEditRequest = { viewModel.startEdit(appointment) },
+                            onDeleteRequest = { handleDelete(appointment) },
+                            faded = true
+                        )
                     }
                 }
             }
@@ -179,12 +225,15 @@ private fun AppointmentRow(
     isPlaying: Boolean,
     onPlayToggle: () -> Unit,
     onEditRequest: () -> Unit,
-    onDeleteRequest: () -> Unit
+    onDeleteRequest: () -> Unit,
+    faded: Boolean = false
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (faded) SurfaceWhite.copy(alpha = 0.75f) else SurfaceWhite
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (faded) 1.dp else 3.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(

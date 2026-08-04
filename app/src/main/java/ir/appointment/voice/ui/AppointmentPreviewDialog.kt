@@ -46,8 +46,10 @@ fun AppointmentPreviewDialog(
         val jd = day.trim().toIntOrNull()
         val jm = if (monthIndex in 0..11) monthIndex + 1 else null
         val jy = year.trim().toIntOrNull()
-        val h = hour.trim().toIntOrNull()
-        val m = minute.trim().toIntOrNull()
+        val minuteVal = minute.trim().toIntOrNull()
+        val hourVal = hour.trim().toIntOrNull()
+        val h = hourVal ?: if (minuteVal != null) 0 else null
+        val m = minuteVal
 
         val weekday = if (jy != null && jm != null && jd != null) {
             PersianCalendar.weekdayName(jy, jm, jd)

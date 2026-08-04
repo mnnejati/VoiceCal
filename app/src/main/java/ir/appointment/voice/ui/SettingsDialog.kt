@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,6 +30,8 @@ fun SettingsDialog(
     currentAlarmSoundUri: String,
     currentAlarmDurationSeconds: Int,
     onPickAlarmSound: (current: String, onPicked: (String) -> Unit) -> Unit,
+    isIgnoringBatteryOptimizations: Boolean,
+    onRequestIgnoreBatteryOptimizations: () -> Unit,
     onSave: (RecognitionMode, String, Boolean, String, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -140,6 +143,24 @@ fun SettingsDialog(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text("بین ۳ تا ۱۲۰ ثانیه؛ پیش‌فرض ۱۵ ثانیه.", fontSize = 11.sp, color = TextSecondary)
+
+                    if (!isIgnoringBatteryOptimizations) {
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = onRequestIgnoreBatteryOptimizations,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Filled.BatteryChargingFull, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("افزایش قابلیت‌اطمینان آلارم", fontSize = 13.sp)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "بعضی گوشی‌ها (شیائومی، هواوی، سامسونگ و...) برای صرفه‌جویی باتری ممکن است اپ‌ها را در پس‌زمینه ببندند و مانع اجرای آلارم شوند. این دکمه از اندروید می‌خواهد این اپ را از آن محدودیت مستثنی کند.",
+                            fontSize = 10.5.sp,
+                            color = TextSecondary
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(18.dp))

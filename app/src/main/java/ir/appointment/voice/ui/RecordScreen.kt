@@ -36,7 +36,9 @@ fun RecordScreen(
     hasMicPermission: Boolean,
     onRequestPermission: () -> Unit,
     onShowAppointments: () -> Unit,
-    onPickAlarmSound: (current: String, onPicked: (String) -> Unit) -> Unit
+    onPickAlarmSound: (current: String, onPicked: (String) -> Unit) -> Unit,
+    isIgnoringBatteryOptimizations: Boolean,
+    onRequestIgnoreBatteryOptimizations: () -> Unit
 ) {
     val recordingState by viewModel.recordingState.collectAsState()
     val preview by viewModel.pendingPreview.collectAsState()
@@ -219,6 +221,8 @@ fun RecordScreen(
             currentAlarmSoundUri = alarmSoundUri,
             currentAlarmDurationSeconds = alarmDurationSeconds,
             onPickAlarmSound = onPickAlarmSound,
+            isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations,
+            onRequestIgnoreBatteryOptimizations = onRequestIgnoreBatteryOptimizations,
             onSave = { mode, key, enabled, soundUri, durationSeconds ->
                 viewModel.updateSettings(mode, key)
                 viewModel.updateAlarmSettings(enabled, soundUri, durationSeconds)

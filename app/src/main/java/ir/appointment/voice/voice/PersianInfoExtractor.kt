@@ -65,7 +65,9 @@ object PersianInfoExtractor {
         val location = extractAfterKeyword(normalized, listOf("در محل", "در آدرس", "در"))
             ?: extractLocationAfterGoVerb(normalized)
 
-        val spokenWeekday = weekdays.firstOrNull { normalized.contains(it) }
+        // Longer names first — "شنبه" is a suffix of "پنجشنبه"/"یکشنبه"/"دوشنبه" etc,
+        // so without this ordering the short form would incorrectly match first.
+        val spokenWeekday = weekdays.sortedByDescending { it.length }.firstOrNull { normalized.contains(it) }
 
         var jy: Int? = null
         var jm: Int? = null

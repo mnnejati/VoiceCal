@@ -37,6 +37,10 @@ class GroqAppointmentExtractor(private val apiKey: String) {
                   to the NEXT occurrence of that weekday from today.
                 - If a month name is said without a day, or a day without a month, use whatever partial
                   information is available rather than leaving everything null.
+                - The resolved date must NEVER be earlier than today (${today.first}/${today.second}/${today.third}).
+                  People don't dictate appointments that already happened. If your first reading of the
+                  sentence would place the date in the past, re-check — you likely misread an ordinal/weekday
+                  and it almost certainly means the next future occurrence instead.
 
                 TIME RULES:
                 - Always output 24-hour "hour". "عصر" or "شب" with a 1-11 hour means add 12 (e.g. "۶ عصر" -> 18).
