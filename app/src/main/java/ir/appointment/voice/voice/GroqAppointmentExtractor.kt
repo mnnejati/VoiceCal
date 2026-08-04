@@ -110,8 +110,16 @@ class GroqAppointmentExtractor(private val apiKey: String) {
             """.trimIndent()
 
             val requestBody = JSONObject().apply {
-                put("model", "llama-3.3-70b-versatile")
+                // llama-3.3-70b-versatile was deprecated by Groq (June 2026); gpt-oss-120b
+                // is Groq's official recommended replacement — it also outperforms on
+                // MMLU/GPQA benchmarks, is cheaper per token, and runs faster (MoE
+                // architecture with far fewer active parameters per token).
+                put("model", "openai/gpt-oss-120b")
                 put("temperature", 0)
+                // gpt-oss-120b is a reasoning model; "low" keeps latency down since this
+                // is a simple structured-extraction task, not a task that benefits from
+                // deep reasoning.
+                put("reasoning_effort", "low")
                 put("response_format", JSONObject().put("type", "json_object"))
                 put(
                     "messages",
