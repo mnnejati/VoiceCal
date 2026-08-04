@@ -135,10 +135,10 @@ object PersianInfoExtractor {
                 jy = shifted.first; jm = shifted.second; jd = shifted.third
                 displayDate = "فردا"
             }
-            normalized.contains("امروز") -> {
+            normalized.contains("امروز") || normalized.contains("امشب") -> {
                 val (y, m, d) = PersianCalendar.todayJalali()
                 jy = y; jm = m; jd = d
-                displayDate = "امروز"
+                displayDate = if (normalized.contains("امشب")) "امشب" else "امروز"
             }
             spokenWeekday != null -> {
                 val targetIdx = weekdayIndex[spokenWeekday]

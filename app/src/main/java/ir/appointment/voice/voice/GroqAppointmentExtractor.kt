@@ -31,10 +31,13 @@ class GroqAppointmentExtractor(private val apiKey: String) {
 
                 DATE RULES:
                 - Resolve EVERY date expression to an absolute Jalali date using today's date above as the anchor —
-                  relative words (فردا=+1 day, پس‌فردا=+2 days, "N روز دیگر/بعد"=+N days, "هفته‌ی دیگر"=+7 days),
+                  relative words ("امروز"=+0 days, "امشب"=+0 days [tonight is still TODAY's date, just implies
+                  evening], فردا=+1 day, پس‌فردا=+2 days, "N روز دیگر/بعد"=+N days, "هفته‌ی دیگر"=+7 days),
                   ordinal/written day-of-month words (هفتم=7, دوازدهم=12, بیست و یکم=21, سی‌ام=30), numeric days
                   (digits or Persian digits), and weekday names alone (e.g. "سه‌شنبه" with no date said) resolved
                   to the NEXT occurrence of that weekday from today.
+                - "امشب" (tonight) ALWAYS means today's date — never leave jalali_year/month/day null just
+                  because the sentence says "امشب" instead of "امروز"; they resolve to the exact same date.
                 - If a month name is said without a day, or a day without a month, use whatever partial
                   information is available rather than leaving everything null.
                 - The resolved date must NEVER be earlier than today (${today.first}/${today.second}/${today.third}).
@@ -52,13 +55,18 @@ class GroqAppointmentExtractor(private val apiKey: String) {
 
                 SPEECH-TO-TEXT ARTIFACT CORRECTION — important:
                 - The sentence you receive came from automatic speech recognition, which sometimes splits a
-                  single Persian word into two fragments with a stray space, or mishears a name phonetically.
-                  When a "location" or "person" candidate looks like a garbled/split real word rather than two
-                  genuine separate words, output your best-corrected single word/name instead of parroting the
-                  fragments. Example patterns: "در مونگاه" or "در مانگاه" -> correct to "درمانگاه" (a clinic,
-                  it's a LOCATION); "عبول فضل" -> correct to "ابوالفضل" (a common Persian given name, it's a
-                  PERSON). Use context (is it after "برم"/"رفتن به" -> likely a place; is it after "با" -> likely
-                  a person) plus your knowledge of real Persian words/names to pick the most plausible correction.
+                  single Persian word into two fragments with a stray space, mishears a name phonetically, or
+                  garbles a place name into something that isn't a real place at all. When a "location" or
+                  "person" candidate looks garbled/implausible rather than a real word, output your
+                  best-corrected version instead of parroting the raw fragments — use your own knowledge of
+                  real Persian given names AND real Iranian cities/districts/neighborhoods to pick the most
+                  phonetically-plausible real correction. If you don't recognize ANY real place/name close to
+                  what was heard, keep the original text rather than guessing wildly.
+                  Examples: "در مونگاه"/"در مانگاه" -> "درمانگاه" (a clinic, LOCATION). "عبول فضل" -> "ابوالفضل"
+                  (a common given name, PERSON). "زهرین شهر" (not a real place) -> "رزین‌شهر" (a real district
+                  in Karaj), because "زهرین‌شهر" doesn't exist but is phonetically almost identical to the real
+                  "رزین‌شهر". Use context too: after "برم"/"رفتن به" -> likely a place; after "با" -> likely a
+                  person.
 
                 LOCATION vs PERSON — this is the most common mistake, be careful:
                 - "location" = ONLY the bare place/business name (e.g. "دندانپزشکی", "کافه نادری", "دفتر شرکت",
@@ -96,6 +104,9 @@ class GroqAppointmentExtractor(private val apiKey: String) {
 
                 "نه و نیم با عبول فضل قرار دارم" ->
                 {"jalali_year":null,"jalali_month":null,"jalali_day":null,"hour":9,"minute":30,"location":null,"person":"ابوالفضل"}
+
+                "امشب ساعت ۹ با علی قرار دارم" (assume today is ${today.first}/${today.second}/${today.third}) ->
+                a JSON with jalali_year/month/day set to EXACTLY today's date above (never null), "hour":9, "minute":0, "location":null, "person":"علی"
             """.trimIndent()
 
             val requestBody = JSONObject().apply {

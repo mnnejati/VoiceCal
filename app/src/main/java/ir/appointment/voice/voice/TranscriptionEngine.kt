@@ -26,7 +26,9 @@ object TranscriptRepair {
         "بیمار ستان" to "بیمارستان",
         "دندان پزشکی" to "دندانپزشکی",
         "دندون پزشکی" to "دندانپزشکی",
-        "آرایش گاه" to "آرایشگاه"
+        "آرایش گاه" to "آرایشگاه",
+        "زهرین شهر" to "رزین‌شهر",
+        "زهرین‌شهر" to "رزین‌شهر"
     )
 
     fun repair(text: String): String {
@@ -69,8 +71,8 @@ class GroqWhisperTranscriber(private val apiKey: String) : TranscriptionEngine {
             // This measurably reduces mis-segmentation of common colloquial Persian
             // compound words (e.g. "درمونگاه" -> "در" + "مونگاه") and misspelled
             // names, by giving the model correctly-spelled reference examples.
-            val biasPrompt = "قرار ملاقات، درمانگاه، بیمارستان، مطب دکتر، دندانپزشکی، دفتر کار، " +
-                "کافه، رستوران، ابوالفضل، محمدرضا، علیرضا، فاطمه، دکتر احمدی، ساعت، فردا، پس‌فردا."
+            val biasPrompt = "قرار ملاقات، امروز، امشب، فردا، پس‌فردا، درمانگاه، بیمارستان، مطب دکتر، دندانپزشکی، " +
+                "دفتر کار، کافه، رستوران، رزین‌شهر، ابوالفضل، محمدرضا، علیرضا، فاطمه، دکتر احمدی، ساعت."
 
             conn.outputStream.use { out ->
                 fun field(name: String, value: String) {
