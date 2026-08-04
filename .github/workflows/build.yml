@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # required so the workflow can create a Release and upload assets
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,3 +36,17 @@ jobs:
         with:
           name: voice-cal-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Create GitHub Release with APK attached
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Build #${{ github.run_number }}"
+          body: |
+            بیلد خودکار از commit: ${{ github.sha }}
+            شاخه: ${{ github.ref_name }}
+          prerelease: true
+          generate_release_notes: false
+          files: app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
