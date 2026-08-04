@@ -21,7 +21,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.appointment.voice.data.AppointmentEntity
@@ -260,21 +263,18 @@ private fun AppointmentRow(
             Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = appointment.displayDate ?: "تاریخ نامشخص",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = TextPrimary
-                    )
-                    if (!appointment.weekdayName.isNullOrBlank()) {
-                        Text(
-                            text = "  (${appointment.weekdayName})",
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)) {
+                            append(appointment.displayDate ?: "تاریخ نامشخص")
+                        }
+                        if (!appointment.weekdayName.isNullOrBlank()) {
+                            withStyle(SpanStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, color = TextSecondary)) {
+                                append("  (${appointment.weekdayName})")
+                            }
+                        }
                     }
-                }
+                )
 
                 if (!appointment.displayTime.isNullOrBlank()) {
                     Spacer(Modifier.height(4.dp))

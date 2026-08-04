@@ -172,7 +172,8 @@ object PersianInfoExtractor {
             spokenWeekday
         }
 
-        // Time extraction: "ساعت 5"، "ساعت پنج و نیم"، "ساعت 17:30"
+        // Time extraction: "ساعت 5"، "ساعت پنج و نیم"، "ساعت 17:30"، یا محاوره‌ای بدون
+        // گفتنِ «ساعت» مثل "یازده و ربع"، "نه و نیم"، "یک و ربع"
         var hour: Int? = null
         var minute: Int? = null
         var displayTime: String? = null
@@ -186,14 +187,21 @@ object PersianInfoExtractor {
         val timeWordRegex = Regex("""ساعت\s*([\u0600-\u06FF]+(?:\s+و\s+[\u0600-\u06FF]+)?)""")
         val timeWordMatch = timeWordRegex.find(normalized)
 
+        // Fallback for bare colloquial phrasing with no "ساعت" at all — only matches
+        // when a recognized hour-word is directly followed by "و" + a fraction word
+        // (نیم/ربع/...), which keeps false positives low (a random "دو و سه" won't
+        // match since "سه" isn't a fraction word).
+        val hourWordPattern = wordNumbers.keys
+            .filter { (wordNumbers[it] ?: -1) in 1..12 }
+            .sortedByDescending { it.length }
+            .joinToString("|")
+        val bareTimeWordRegex = Regex("""(?<!ساعت\s)($hourWordPattern)\s+و\s+(نیم|ربع\s+کم|کم\s+ربع|ربع)""")
+        val bareTimeWordMatch = bareTimeWordRegex.find(normalized)
+
         when {
             timeColonMatch != null -> {
                 hour = timeColonMatch.groupValues[1].toIntOrNull()
                 minute = timeColonMatch.groupValues[2].toIntOrNull()
-            }
-            timeNumMatch != null -> {
-                hour = timeNumMatch.groupValues[1].toIntOrNull()
-                minute = 0
             }
             timeWordMatch != null -> {
                 val phrase = timeWordMatch.groupValues[1]
@@ -205,6 +213,19 @@ object PersianInfoExtractor {
                     phrase.contains("ربع") -> 15
                     else -> 0
                 }
+            }
+            bareTimeWordMatch != null -> {
+                hour = wordNumbers[bareTimeWordMatch.groupValues[1]]
+                val fraction = bareTimeWordMatch.groupValues[2]
+                minute = when {
+                    fraction.contains("نیم") -> 30
+                    fraction.contains("کم") -> -15 // handled below
+                    else -> 15 // bare "ربع"
+                }
+            }
+            timeNumMatch != null -> {
+                hour = timeNumMatch.groupValues[1].toIntOrNull()
+                minute = 0
             }
         }
 

@@ -197,7 +197,11 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
             GroqAppointmentExtractor(_apiKey.value).extract(text)
         }.getOrNull() ?: return rejectPastDate(regexResult)
 
-        val jy = llmResult.jalaliYear ?: regexResult.jalaliYear
+        val jy = llmResult.jalaliYear ?: regexResult.jalaliYear ?: run {
+            val jmv = llmResult.jalaliMonth ?: regexResult.jalaliMonth
+            val jdv = llmResult.jalaliDay ?: regexResult.jalaliDay
+            if (jmv != null && jdv != null) PersianCalendar.todayJalali().first else null
+        }
         val jm = llmResult.jalaliMonth ?: regexResult.jalaliMonth
         val jd = llmResult.jalaliDay ?: regexResult.jalaliDay
         val hour = llmResult.hour ?: regexResult.hour

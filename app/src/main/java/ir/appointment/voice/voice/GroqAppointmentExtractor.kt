@@ -46,6 +46,19 @@ class GroqAppointmentExtractor(private val apiKey: String) {
                 - Always output 24-hour "hour". "عصر" or "شب" with a 1-11 hour means add 12 (e.g. "۶ عصر" -> 18).
                   "صبح" or "ظهر" with 1-11 keeps it as-is (۶ صبح -> 6). Bare "ساعت ۱۷" is already 24-hour.
                 - "و نیم" = 30 minutes, "ربع" = 15 minutes, "ربع به X" = (X-1):45.
+                - Colloquial Persian very often drops the word "ساعت" entirely and just says the hour +
+                  fraction directly — treat these exactly the same as if "ساعت" were there:
+                  "یازده و ربع" = 11:15, "نه و نیم" = 9:30, "یک و ربع" = 1:15, "هشت و نیم شب" = 20:30.
+
+                SPEECH-TO-TEXT ARTIFACT CORRECTION — important:
+                - The sentence you receive came from automatic speech recognition, which sometimes splits a
+                  single Persian word into two fragments with a stray space, or mishears a name phonetically.
+                  When a "location" or "person" candidate looks like a garbled/split real word rather than two
+                  genuine separate words, output your best-corrected single word/name instead of parroting the
+                  fragments. Example patterns: "در مونگاه" or "در مانگاه" -> correct to "درمانگاه" (a clinic,
+                  it's a LOCATION); "عبول فضل" -> correct to "ابوالفضل" (a common Persian given name, it's a
+                  PERSON). Use context (is it after "برم"/"رفتن به" -> likely a place; is it after "با" -> likely
+                  a person) plus your knowledge of real Persian words/names to pick the most plausible correction.
 
                 LOCATION vs PERSON — this is the most common mistake, be careful:
                 - "location" = ONLY the bare place/business name (e.g. "دندانپزشکی", "کافه نادری", "دفتر شرکت",
@@ -77,6 +90,12 @@ class GroqAppointmentExtractor(private val apiKey: String) {
 
                 "سه‌شنبه ساعت ۹ بیمارستان میلاد" ->
                 a JSON with jalali date resolved to the next Tuesday from today, "hour":9, "minute":0, "location":"بیمارستان میلاد", "person":null
+
+                "یازده و ربع باید برم درمونگاه" ->
+                {"jalali_year":null,"jalali_month":null,"jalali_day":null,"hour":11,"minute":15,"location":"درمانگاه","person":null}
+
+                "نه و نیم با عبول فضل قرار دارم" ->
+                {"jalali_year":null,"jalali_month":null,"jalali_day":null,"hour":9,"minute":30,"location":null,"person":"ابوالفضل"}
             """.trimIndent()
 
             val requestBody = JSONObject().apply {
@@ -118,13 +137,20 @@ class GroqAppointmentExtractor(private val apiKey: String) {
                 .getString("content")
 
             val fields = JSONObject(content)
-            val jy = fields.optIntOrNull("jalali_year")
+            var jy = fields.optIntOrNull("jalali_year")
             val jm = fields.optIntOrNull("jalali_month")
             val jd = fields.optIntOrNull("jalali_day")
             val hour = fields.optIntOrNull("hour")
             val minute = fields.optIntOrNull("minute")
-            val location = fields.optString("location", "").ifBlank { null }
-            val person = fields.optString("person", "").ifBlank { null }
+            val location = fields.optStringOrNull("location")
+            val person = fields.optStringOrNull("person")
+
+            // People almost never state the year out loud ("دوازدهم مرداد" not
+            // "دوازدهم مرداد ۱۴۰۳") — default to the current Jalali year whenever a
+            // month+day were resolved but no year was given.
+            if (jy == null && jm != null && jd != null) {
+                jy = today.first
+            }
 
             val weekday = if (jy != null && jm != null && jd != null) PersianCalendar.weekdayName(jy, jm, jd) else null
             val displayDate = if (jy != null && jm != null && jd != null) {
@@ -156,4 +182,12 @@ class GroqAppointmentExtractor(private val apiKey: String) {
 
     private fun JSONObject.optIntOrNull(key: String): Int? =
         if (isNull(key) || !has(key)) null else optInt(key)
+
+    /** Unlike optString(), correctly returns null (not the literal string "null")
+     * when the JSON value is a real JSON null instead of a string. */
+    private fun JSONObject.optStringOrNull(key: String): String? {
+        if (isNull(key) || !has(key)) return null
+        val value = optString(key, "")
+        return value.ifBlank { null }?.takeIf { it != "null" }
+    }
 }

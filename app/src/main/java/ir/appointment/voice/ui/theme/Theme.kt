@@ -6,6 +6,9 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 
 private val LightColors = lightColorScheme(
     primary = VividPurple,
@@ -38,7 +41,14 @@ fun AppointmentVoiceTheme(
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = AppTypography,
-        content = content
-    )
+        typography = AppTypography
+    ) {
+        // All content in this app is Persian, so it must always read right-to-left —
+        // regardless of the phone's system UI language (which many users, especially
+        // testers, run in English). Without this, Row/Icon/Alignment ordering follows
+        // the SYSTEM locale's direction instead of the CONTENT's actual direction.
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            content()
+        }
+    }
 }

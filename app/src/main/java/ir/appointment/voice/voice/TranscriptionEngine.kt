@@ -15,6 +15,30 @@ interface TranscriptionEngine {
 }
 
 /**
+ * Fixes common speech-recognition word-splitting mistakes seen in casual/colloquial
+ * Persian (e.g. "درمونگاه" heard as "در" + "مونگاه"). Growable dictionary of known
+ * bad splits -> correct word; applied to any transcript regardless of source engine.
+ */
+object TranscriptRepair {
+    private val knownSplits = listOf(
+        "در مونگاه" to "درمانگاه",
+        "درمونگاه" to "درمانگاه",
+        "بیمار ستان" to "بیمارستان",
+        "دندان پزشکی" to "دندانپزشکی",
+        "دندون پزشکی" to "دندانپزشکی",
+        "آرایش گاه" to "آرایشگاه"
+    )
+
+    fun repair(text: String): String {
+        var result = text
+        for ((broken, fixed) in knownSplits) {
+            result = result.replace(broken, fixed)
+        }
+        return result
+    }
+}
+
+/**
  * Sends the finished recording to Groq's free Whisper Large v3 transcription
  * endpoint (OpenAI-compatible API). Groq's free tier currently allows roughly
  * 2,000 transcription requests/day at no cost — no credit card required.
@@ -40,6 +64,14 @@ class GroqWhisperTranscriber(private val apiKey: String) : TranscriptionEngine {
                 setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
             }
 
+            // Whisper supports an optional "prompt" that biases transcription toward
+            // the vocabulary/spelling it contains, without forcing that exact text.
+            // This measurably reduces mis-segmentation of common colloquial Persian
+            // compound words (e.g. "درمونگاه" -> "در" + "مونگاه") and misspelled
+            // names, by giving the model correctly-spelled reference examples.
+            val biasPrompt = "قرار ملاقات، درمانگاه، بیمارستان، مطب دکتر، دندانپزشکی، دفتر کار، " +
+                "کافه، رستوران، ابوالفضل، محمدرضا، علیرضا، فاطمه، دکتر احمدی، ساعت، فردا، پس‌فردا."
+
             conn.outputStream.use { out ->
                 fun field(name: String, value: String) {
                     out.write("--$boundary\r\n".toByteArray())
@@ -48,6 +80,7 @@ class GroqWhisperTranscriber(private val apiKey: String) : TranscriptionEngine {
                 }
                 field("model", "whisper-large-v3")
                 field("language", "fa")
+                field("prompt", biasPrompt)
 
                 out.write("--$boundary\r\n".toByteArray())
                 out.write("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".toByteArray())
@@ -61,7 +94,8 @@ class GroqWhisperTranscriber(private val apiKey: String) : TranscriptionEngine {
                 ?.bufferedReader()?.use { it.readText() } ?: ""
 
             if (code in 200..299) {
-                Result.success(JSONObject(body).optString("text", ""))
+                val rawText = JSONObject(body).optString("text", "")
+                Result.success(TranscriptRepair.repair(rawText))
             } else {
                 Result.failure(Exception(friendlyHttpError(code, body)))
             }
@@ -98,7 +132,7 @@ class OfflineVoskTranscriber(private val model: Model) : TranscriptionEngine {
             }
             val text = JSONObject(recognizer.finalResult ?: "{}").optString("text", "")
             recognizer.close()
-            Result.success(text)
+            Result.success(TranscriptRepair.repair(text))
         } catch (e: Exception) {
             Result.failure(Exception("خطا در تشخیص گفتار آفلاین: ${e.message ?: e.javaClass.simpleName}"))
         }
