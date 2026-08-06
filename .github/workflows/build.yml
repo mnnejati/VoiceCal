@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HAS_RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
 
     steps:
       - name: Checkout code
@@ -28,16 +30,32 @@ jobs:
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
+      - name: Decode release keystore (if configured)
+        if: env.HAS_RELEASE_KEYSTORE == 'true'
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/voicecal-release.keystore
+
+      - name: Build signed release APK (if keystore configured)
+        if: env.HAS_RELEASE_KEYSTORE == 'true'
+        env:
+          RELEASE_KEYSTORE_PATH: voicecal-release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon
+
       - name: List actual APK output files (diagnostic)
         run: find app/build/outputs/apk -type f -name "*.apk" || echo "No APK files found at all"
 
-      - name: Upload APK artifact
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: voice-cal-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
 
-      - name: Create GitHub Release with APK attached
+      - name: Create GitHub Release with APK(s) attached
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
@@ -45,8 +63,13 @@ jobs:
           body: |
             بیلد خودکار از commit: ${{ github.sha }}
             شاخه: ${{ github.ref_name }}
+
+            اگر فایل VoiceCal-release.apk موجود است، همان را نصب کنید (امضای واقعی، هشدار کمتر Play Protect).
+            VoiceCal-debug.apk فقط برای تست داخلی است.
           prerelease: true
           generate_release_notes: false
-          files: app/build/outputs/apk/debug/*.apk
+          files: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
