@@ -9,6 +9,7 @@ import ir.appointment.voice.data.AppointmentRepository
 import ir.appointment.voice.data.RecognitionMode
 import ir.appointment.voice.data.SettingsStore
 import ir.appointment.voice.notification.ReminderScheduler
+import ir.appointment.voice.voice.AudioCompressor
 import ir.appointment.voice.voice.AudioPlayerManager
 import ir.appointment.voice.voice.ExtractedAppointment
 import ir.appointment.voice.voice.OfflineVoskTranscriber
@@ -301,6 +302,8 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     fun confirmPreview(edited: ExtractedAppointment) {
         val preview = _pendingPreview.value ?: return
         viewModelScope.launch {
+            val finalAudioPath = withContext(Dispatchers.IO) { compressForStorage(preview.audioFilePath) }
+
             val id = repository.save(
                 AppointmentEntity(
                     rawText = edited.rawText,
@@ -314,7 +317,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
                     minute = edited.minute,
                     displayDate = edited.displayDate,
                     displayTime = edited.displayTime,
-                    audioFilePath = preview.audioFilePath,
+                    audioFilePath = finalAudioPath,
                     sortTimestamp = edited.sortTimestamp
                 )
             )
@@ -373,6 +376,22 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         if (appointment.sortTimestamp != null) {
             val label = buildLabel(appointment.displayDate, appointment.displayTime, appointment.location, appointment.personName)
             ReminderScheduler.schedule(getApplication(), appointment.id, appointment.sortTimestamp, label)
+        }
+    }
+
+    /**
+     * Compresses the temporary WAV recording into a much smaller AAC file for
+     * long-term storage. Falls back to keeping the original WAV if compression
+     * fails for any reason (never lose the recording over a storage optimization).
+     */
+    private fun compressForStorage(wavPath: String): String {
+        val aacPath = wavPath.removeSuffix(".wav") + ".m4a"
+        val success = AudioCompressor.compressWavToAac(wavPath, aacPath)
+        return if (success) {
+            java.io.File(wavPath).delete()
+            aacPath
+        } else {
+            wavPath
         }
     }
 

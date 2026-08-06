@@ -21,6 +21,7 @@ import ir.appointment.voice.BuildConfig
 import ir.appointment.voice.data.RecognitionMode
 import ir.appointment.voice.ui.theme.AccentTeal
 import ir.appointment.voice.ui.theme.TextSecondary
+import ir.appointment.voice.voice.ModelInfo
 
 @Composable
 fun SettingsDialog(
@@ -174,6 +175,14 @@ fun SettingsDialog(
                 Text("نسخه ۱.۰  •  آخرین بیلد: ${BuildConfig.BUILD_DATE}", fontSize = 11.5.sp, color = TextSecondary)
                 Spacer(Modifier.height(6.dp))
                 Text("توسعه‌دهنده: M.Nejati", fontSize = 12.5.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+
+                if (mode == RecognitionMode.ONLINE) {
+                    Spacer(Modifier.height(10.dp))
+                    Text("مدل‌های آنلاین مورد استفاده:", fontSize = 11.5.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(3.dp))
+                    Text("• تشخیص گفتار: ${ModelInfo.TRANSCRIPTION_MODEL_DISPLAY}", fontSize = 11.sp, color = TextSecondary)
+                    Text("• استخراج اطلاعات: ${ModelInfo.EXTRACTION_MODEL_DISPLAY}", fontSize = 11.sp, color = TextSecondary)
+                }
             }
         },
         confirmButton = {

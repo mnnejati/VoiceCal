@@ -80,7 +80,7 @@ class GroqWhisperTranscriber(private val apiKey: String) : TranscriptionEngine {
                     out.write("Content-Disposition: form-data; name=\"$name\"\r\n\r\n".toByteArray())
                     out.write("$value\r\n".toByteArray())
                 }
-                field("model", "whisper-large-v3")
+                field("model", ModelInfo.TRANSCRIPTION_MODEL_ID)
                 field("language", "fa")
                 field("prompt", biasPrompt)
 

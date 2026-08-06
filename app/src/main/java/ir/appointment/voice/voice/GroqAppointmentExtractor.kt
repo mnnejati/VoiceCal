@@ -114,7 +114,7 @@ class GroqAppointmentExtractor(private val apiKey: String) {
                 // is Groq's official recommended replacement — it also outperforms on
                 // MMLU/GPQA benchmarks, is cheaper per token, and runs faster (MoE
                 // architecture with far fewer active parameters per token).
-                put("model", "openai/gpt-oss-120b")
+                put("model", ModelInfo.EXTRACTION_MODEL_ID)
                 put("temperature", 0)
                 // gpt-oss-120b is a reasoning model; "low" keeps latency down since this
                 // is a simple structured-extraction task, not a task that benefits from

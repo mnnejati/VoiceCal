@@ -41,12 +41,36 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+
+        // Real release signing uses a PRIVATE keystore that is NEVER committed to
+        // the repo — it's decoded from a GitHub Actions secret at build time (see
+        // the workflow file). This is what actually addresses Play Protect's
+        // "debug certificate" red flag: debug.keystore above uses a widely-shared,
+        // publicly-known password/alias used by countless other apps, which is
+        // itself a signal Play Protect flags. A unique private key removes that
+        // specific signal.
+        create("release") {
+            val keystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+            if (!keystorePath.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Fall back to debug signing if the release secrets aren't present
+            // (e.g. a local build outside CI) so the build never just fails.
+            signingConfig = if (!System.getenv("RELEASE_KEYSTORE_PATH").isNullOrBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -77,12 +101,12 @@ android {
         }
     }
 
-    // Rename the generated APK so the CI artifact path (app/build/outputs/apk/debug/VoiceCal.apk)
-    // matches what the GitHub Actions workflow expects, instead of the AGP default "app-debug.apk".
+    // Distinct filenames per build type so debug and release APKs never collide
+    // when both are attached to the same GitHub Release.
     applicationVariants.all {
         outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output.outputFileName = "VoiceCal.apk"
+            output.outputFileName = "VoiceCal-${buildType.name}.apk"
         }
     }
 }
