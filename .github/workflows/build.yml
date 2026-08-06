@@ -45,7 +45,25 @@ jobs:
         run: gradle assembleRelease --no-daemon
 
       - name: List actual APK output files (diagnostic)
-        run: find app/build/outputs/apk -type f -name "*.apk" || echo "No APK files found at all"
+        run: find app/build/outputs/apk -type f -name "*.apk" -exec ls -lh {} \; || echo "No APK files found at all"
+
+      - name: Compare debug vs release APK contents (diagnostic)
+        if: env.HAS_RELEASE_KEYSTORE == 'true'
+        run: |
+          mkdir -p /tmp/apk-debug /tmp/apk-release
+          DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          unzip -q "$DEBUG_APK" -d /tmp/apk-debug
+          unzip -q "$RELEASE_APK" -d /tmp/apk-release
+          echo "===== DEBUG APK — top-level folder sizes ====="
+          du -sh /tmp/apk-debug/*/ 2>/dev/null | sort -rh
+          echo ""
+          echo "===== RELEASE APK — top-level folder sizes ====="
+          du -sh /tmp/apk-release/*/ 2>/dev/null | sort -rh
+          echo ""
+          echo "===== lib/ (native libraries) comparison ====="
+          echo "-- debug --"; find /tmp/apk-debug/lib -type f -exec ls -lh {} \; 2>/dev/null
+          echo "-- release --"; find /tmp/apk-release/lib -type f -exec ls -lh {} \; 2>/dev/null
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
