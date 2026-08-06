@@ -62,6 +62,7 @@ object PersianInfoExtractor {
         val normalized = normalizeDigits(text.trim())
 
         val person = extractAfterKeyword(normalized, listOf("با آقای", "با خانم", "با دکتر", "با"))
+            ?: extractPersonByTitle(normalized)
         val location = extractAfterKeyword(normalized, listOf("در محل", "در آدرس", "در"))
             ?: extractLocationAfterGoVerb(normalized)
 
@@ -89,9 +90,9 @@ object PersianInfoExtractor {
         val ordinalDayMonthMatch = ordinalDayMonthRegex.find(normalized)
 
         // 2c) "N روز دیگر" / "N روز بعد" (relative day offset, digit or word count)
-        val relativeDayDigitRegex = Regex("""(\d{1,2})\s*روز\s*(دیگر|بعد)""")
+        val relativeDayDigitRegex = Regex("""(\d{1,2})\s*روز\s*(دیگر|دیگه|بعد)""")
         val relativeDayWordPattern = wordNumbers.keys.sortedByDescending { it.length }.joinToString("|")
-        val relativeDayWordRegex = Regex("""($relativeDayWordPattern)\s*روز\s*(دیگر|بعد)""")
+        val relativeDayWordRegex = Regex("""($relativeDayWordPattern)\s*روز\s*(دیگر|دیگه|بعد)""")
         val relativeDayDigitMatch = relativeDayDigitRegex.find(normalized)
         val relativeDayWordMatch = relativeDayWordRegex.find(normalized)
 
@@ -290,7 +291,8 @@ object PersianInfoExtractor {
                     if (after.isNotEmpty()) {
                         val stopWords = setOf(
                             "در", "با", "ساعت", "روز", "تاریخ", "فردا", "امروز", "پس‌فردا",
-                            "باید", "برم", "بروم", "میرم", "می‌روم", "قراره", "قرار"
+                            "باید", "برم", "بروم", "میرم", "می‌روم", "قراره", "قرار",
+                            "دارم", "داره", "دارد", "دارند", "دارید", "داریم", "نوبت"
                         )
                         val words = after.split(Regex("\\s+"))
                         val collected = mutableListOf<String>()
@@ -314,6 +316,21 @@ object PersianInfoExtractor {
      * Fallback for location when no "در" keyword is present, e.g. "باید بروم دندانپزشکی":
      * captures 1-2 words right after a "go to" verb, stopping before time/date words.
      */
+    /**
+     * Fallback for a person mentioned by title without the "با" preposition, e.g.
+     * "نوبت دکتر احمدی دارم" (no "با" at all — "با" extraction alone can't catch this).
+     * A title word (دکتر/آقای/خانم/استاد/مهندس) is a strong standalone signal of a
+     * person's name, wherever it appears in the sentence.
+     */
+    private fun extractPersonByTitle(text: String): String? {
+        val titles = listOf("دکتر", "آقای", "خانم", "استاد", "مهندس")
+        for (title in titles) {
+            val name = extractAfterKeyword(text, listOf(title), maxWords = 2)
+            if (name != null) return "$title $name"
+        }
+        return null
+    }
+
     private fun extractLocationAfterGoVerb(text: String): String? {
         val goVerbs = listOf("می‌روم", "میرم", "برم", "بروم", "می‌رم")
         return extractAfterKeyword(text, goVerbs, maxWords = 2)

@@ -25,6 +25,14 @@ android {
         // needing a manual edit before every release.
         val buildDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         buildConfigField("String", "BUILD_DATE", "\"$buildDate\"")
+
+        // JNA (a Vosk dependency) bundles native .so libraries for every Android
+        // ABI, including x86/x86_64 which real phones never use (only emulators
+        // do) — restricting to the two real-device ABIs drops several MB of dead
+        // weight that was never going to run on an actual phone anyway.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     // AGP normally auto-generates ~/.android/debug.keystore on first use, but on
@@ -96,9 +104,13 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
-        jniLibs {
-            useLegacyPackaging = true
-        }
+        // Deliberately NOT setting jniLibs.useLegacyPackaging = true here.
+        // Leaving it at AGP's modern default (uncompressed native libs, packaged
+        // so the OS can execute them directly from the APK via mmap) is what
+        // prioritizes performance: no separate extraction step at install time,
+        // faster native library loading, and no duplicate extracted copy sitting
+        // in app-private storage. The tradeoff is a somewhat larger APK download,
+        // which matches the stated priority (speed/performance over storage size).
     }
 
     // Distinct filenames per build type so debug and release APKs never collide
