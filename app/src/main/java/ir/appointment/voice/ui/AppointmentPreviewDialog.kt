@@ -33,6 +33,7 @@ fun AppointmentPreviewDialog(
 ) {
     val e = preview.extracted
 
+    var title by remember { mutableStateOf(e.title ?: "") }
     var day by remember { mutableStateOf(e.jalaliDay?.toString() ?: "") }
     var monthIndex by remember { mutableStateOf(e.jalaliMonth?.let { it - 1 } ?: -1) }
     var year by remember { mutableStateOf(e.jalaliYear?.toString() ?: "") }
@@ -67,6 +68,7 @@ fun AppointmentPreviewDialog(
 
         return ExtractedAppointment(
             rawText = e.rawText,
+            title = title.trim().ifBlank { null },
             personName = person.trim().ifBlank { null },
             location = location.trim().ifBlank { null },
             jalaliYear = jy,
@@ -83,12 +85,21 @@ fun AppointmentPreviewDialog(
 
     AlertDialog(
         onDismissRequest = onDiscard,
-        title = { Text("پیش‌نمایش قرار ملاقات", fontWeight = FontWeight.Bold) },
+        title = { Text("پیش‌نمایش", fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text("در صورت اشتباه بودن هر مورد، آن را اصلاح کنید:", fontSize = 12.sp, color = TextSecondary)
                 Spacer(Modifier.height(10.dp))
 
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("موضوع / کاری که باید انجام شود") },
+                    placeholder = { Text("مثلاً: خوردن قرص، پرداخت قسط، تحویل کارها...") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(14.dp))
                 Text("تاریخ", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(

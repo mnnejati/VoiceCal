@@ -263,18 +263,41 @@ private fun AppointmentRow(
             Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)) {
-                            append(appointment.displayDate ?: "تاریخ نامشخص")
-                        }
-                        if (!appointment.weekdayName.isNullOrBlank()) {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, color = TextSecondary)) {
-                                append("  (${appointment.weekdayName})")
+                if (!appointment.title.isNullOrBlank()) {
+                    Text(
+                        text = appointment.title,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = TextPrimary,
+                        maxLines = 2
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(fontWeight = FontWeight.Medium, fontSize = 12.5.sp, color = TextSecondary)) {
+                                append(appointment.displayDate ?: "تاریخ نامشخص")
+                            }
+                            if (!appointment.weekdayName.isNullOrBlank()) {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, color = TextSecondary)) {
+                                    append("  (${appointment.weekdayName})")
+                                }
                             }
                         }
-                    }
-                )
+                    )
+                } else {
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)) {
+                                append(appointment.displayDate ?: "تاریخ نامشخص")
+                            }
+                            if (!appointment.weekdayName.isNullOrBlank()) {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, color = TextSecondary)) {
+                                    append("  (${appointment.weekdayName})")
+                                }
+                            }
+                        }
+                    )
+                }
 
                 if (!appointment.displayTime.isNullOrBlank()) {
                     Spacer(Modifier.height(4.dp))

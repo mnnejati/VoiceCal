@@ -27,15 +27,34 @@ class GroqAppointmentExtractor(private val apiKey: String) {
 
                 TASK: read the single Persian sentence the user sends and output ONLY one JSON object — no
                 markdown fences, no explanation, nothing before or after it — with exactly these keys:
-                {"jalali_year": integer|null, "jalali_month": integer 1-12|null, "jalali_day": integer 1-31|null, "hour": integer 0-23|null, "minute": integer 0-59|null, "location": string|null, "person": string|null}
+                {"title": string|null, "jalali_year": integer|null, "jalali_month": integer 1-12|null, "jalali_day": integer 1-31|null, "hour": integer 0-23|null, "minute": integer 0-59|null, "location": string|null, "person": string|null}
+
+                TITLE — new, important:
+                - "title" is a short (a few words) summary of WHAT needs to be done: "خوردن قرص فلان",
+                  "پرداخت قسط وام", "تحویل کارها به شرکت", "عمل جراحی پلک", "زنگ زدن به دکتر حجتی",
+                  "رفتن به کوه با دوستان دانشگاه". This is NOT the same as location/person — it's the actual
+                  task/purpose. Almost every sentence should get a title; only leave it null if the sentence is
+                  truly just a bare date/time with nothing describing what it's for.
+                - Keep it as a short phrase, not a full repeated sentence — drop date/time words from it (those
+                  already have their own fields) but keep the actual content/action.
 
                 DATE RULES:
                 - Resolve EVERY date expression to an absolute Jalali date using today's date above as the anchor —
                   relative words ("امروز"=+0 days, "امشب"=+0 days [tonight is still TODAY's date, just implies
-                  evening], فردا=+1 day, پس‌فردا=+2 days, "N روز دیگر/بعد"=+N days, "هفته‌ی دیگر"=+7 days),
+                  evening], فردا=+1 day, پس‌فردا=+2 days, "N روز دیگر/بعد"=+N days (colloquial "دیگه" counts the
+                  same as "دیگر"), "هفته‌ی دیگر/آینده" alone=+7 days),
                   ordinal/written day-of-month words (هفتم=7, دوازدهم=12, بیست و یکم=21, سی‌ام=30), numeric days
                   (digits or Persian digits), and weekday names alone (e.g. "سه‌شنبه" with no date said) resolved
                   to the NEXT occurrence of that weekday from today.
+                - "<weekday> هفته آینده/دیگر" (e.g. "شنبه هفته‌ی آینده") means the occurrence of that weekday
+                  AFTER the immediate upcoming one — skip one more week beyond the normal next-occurrence.
+                - "آخر هفته" (end of week) means Iran's weekend, i.e. the nearest upcoming Friday (جمعه) — or
+                  today, if today already is Friday.
+                - "N ماه جاری" or "N ام ماه جاری" means day N of the CURRENT Jalali month/year (e.g. "۲۳ ماه
+                  جاری" with today being mid-Mordad 1403 means 1403/5/23).
+                - "آخر ماه" (end of month) means the LAST valid day of the current Jalali month (30 or 31, or
+                  29/30 for Esfand depending on leap year — use your best judgement, doesn't need to be exact
+                  to the day if uncertain about leap years, just use 29 or 30 for Esfand and 30/31 otherwise).
                 - "امشب" (tonight) ALWAYS means today's date — never leave jalali_year/month/day null just
                   because the sentence says "امشب" instead of "امروز"; they resolve to the exact same date.
                 - If a month name is said without a day, or a day without a month, use whatever partial
@@ -106,7 +125,25 @@ class GroqAppointmentExtractor(private val apiKey: String) {
                 {"jalali_year":null,"jalali_month":null,"jalali_day":null,"hour":9,"minute":30,"location":null,"person":"ابوالفضل"}
 
                 "امشب ساعت ۹ با علی قرار دارم" (assume today is ${today.first}/${today.second}/${today.third}) ->
-                a JSON with jalali_year/month/day set to EXACTLY today's date above (never null), "hour":9, "minute":0, "location":null, "person":"علی"
+                a JSON with jalali_year/month/day set to EXACTLY today's date above (never null), "hour":9, "minute":0, "location":null, "person":"علی", "title":null
+
+                "آخر هفته باید ساعت ۸ قرص فلان را بخورم" ->
+                a JSON with the date resolved to the nearest upcoming Friday, "hour":8, "minute":0, "location":null, "person":null, "title":"خوردن قرص فلان"
+
+                "۲۳ ماه جاری باید قسط وام بانک ملی را بپردازم" ->
+                a JSON with jalali_day:23, jalali_month/year set to the CURRENT month/year from today's date above, "hour":null, "minute":null, "location":null, "person":null, "title":"پرداخت قسط وام بانک ملی"
+
+                "پنج شنبه ساعت یازده باید برم شرکت برای تحویل کارها به آقای رضایی" ->
+                a JSON with the date resolved to the next Thursday, "hour":11, "minute":0, "location":"شرکت", "person":"آقای رضایی", "title":"تحویل کارها"
+
+                "شنبه هفته آینده یک عمل جراحی پلک دارم در رزین‌شهر" ->
+                a JSON with the date resolved to the Saturday AFTER the immediate upcoming one (extra week), "hour":null, "minute":null, "location":"رزین‌شهر", "person":null, "title":"عمل جراحی پلک"
+
+                "جمعه صبح ساعت ۶ میخوام برم کوه صفه با دوستان دانشگاه" ->
+                a JSON with the date resolved to the next Friday, "hour":6, "minute":0, "location":"کوه صفه", "person":"دوستان دانشگاه", "title":"رفتن به کوه"
+
+                "چهارشنبه ساعت ۶ عصر باید زنگ بزنم دکتر حجتی" ->
+                a JSON with the date resolved to the next Wednesday, "hour":18, "minute":0, "location":null, "person":"دکتر حجتی", "title":"زنگ زدن به دکتر حجتی"
             """.trimIndent()
 
             val requestBody = JSONObject().apply {
@@ -163,6 +200,7 @@ class GroqAppointmentExtractor(private val apiKey: String) {
             val minute = fields.optIntOrNull("minute")
             val location = fields.optStringOrNull("location")
             val person = fields.optStringOrNull("person")
+            val title = fields.optStringOrNull("title")
 
             // People almost never state the year out loud ("دوازدهم مرداد" not
             // "دوازدهم مرداد ۱۴۰۳") — default to the current Jalali year whenever a
@@ -181,6 +219,7 @@ class GroqAppointmentExtractor(private val apiKey: String) {
             Result.success(
                 ExtractedAppointment(
                     rawText = text,
+                    title = title,
                     personName = person,
                     location = location,
                     jalaliYear = jy,

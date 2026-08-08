@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Represents a single appointment extracted from a voice note.
+ * Represents a single reminder item extracted from a voice note — either a
+ * classic appointment (person + location) or a general task/reminder (e.g.
+ * "قرص بخورم", "قسط وام را بپردازم") where [title] is the main content.
  *
  * [sortTimestamp] is a best-effort Gregorian epoch-millis value computed from the
  * extracted Jalali date/time so the list can be sorted from nearest to farthest.
@@ -18,6 +20,11 @@ data class AppointmentEntity(
 
     // Raw recognized text (Persian) from the voice input.
     val rawText: String,
+
+    // A short summary of WHAT needs to be done — the main field for general
+    // tasks/reminders ("قرص فلان را بخورم", "قسط وام را بپردازم"). Optional for
+    // classic appointments where person/location already say enough.
+    val title: String? = null,
 
     // Extracted fields (any of these may be null if not present in the speech).
     val personName: String?,

@@ -209,6 +209,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         val minute = llmResult.minute ?: regexResult.minute
         val location = llmResult.location ?: regexResult.location
         val person = llmResult.personName ?: regexResult.personName
+        val title = llmResult.title ?: regexResult.title
 
         val weekday = if (jy != null && jm != null && jd != null) PersianCalendar.weekdayName(jy, jm, jd) else null
         val displayDate = if (jy != null && jm != null && jd != null) {
@@ -220,6 +221,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         return rejectPastDate(
             ExtractedAppointment(
                 rawText = text,
+                title = title,
                 personName = person,
                 location = location,
                 jalaliYear = jy,
@@ -307,6 +309,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
             val id = repository.save(
                 AppointmentEntity(
                     rawText = edited.rawText,
+                    title = edited.title,
                     personName = edited.personName,
                     location = edited.location,
                     jalaliYear = edited.jalaliYear,

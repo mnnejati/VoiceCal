@@ -3,6 +3,7 @@ package ir.appointment.voice.voice
 /** Result of extracting appointment info from a Persian utterance. */
 data class ExtractedAppointment(
     val rawText: String,
+    val title: String? = null,
     val personName: String?,
     val location: String?,
     val jalaliYear: Int?,
@@ -96,6 +97,15 @@ object PersianInfoExtractor {
         val relativeDayDigitMatch = relativeDayDigitRegex.find(normalized)
         val relativeDayWordMatch = relativeDayWordRegex.find(normalized)
 
+        // 2d) "23 ماه جاری" (day N of the current Jalali month)
+        val dayOfCurrentMonthRegex = Regex("""(\d{1,2})\s*(?:ام)?\s*ماه\s*جاری""")
+        val dayOfCurrentMonthMatch = dayOfCurrentMonthRegex.find(normalized)
+
+        // 2e) "هفته‌ی آینده" / "هفته آینده" — used together with a weekday below to
+        // mean "not the closest one, the one after" (handled in the weekday branch).
+        val nextWeekMentioned = normalized.contains("هفته آینده") || normalized.contains("هفته‌ی آینده") ||
+            normalized.contains("هفته ی آینده") || normalized.contains("هفته بعد") || normalized.contains("هفته‌ی بعد")
+
         when {
             numericMatch != null -> {
                 jy = numericMatch.groupValues[1].toIntOrNull()
@@ -111,6 +121,17 @@ object PersianInfoExtractor {
                 jd = ordinalDayNumbers[ordinalDayMonthMatch.groupValues[1]]
                 jm = jalaliMonths.indexOf(ordinalDayMonthMatch.groupValues[2]) + 1
                 jy = ordinalDayMonthMatch.groupValues[3].toIntOrNull()
+            }
+            dayOfCurrentMonthMatch != null -> {
+                val (ty, tm, _) = PersianCalendar.todayJalali()
+                jd = dayOfCurrentMonthMatch.groupValues[1].toIntOrNull()
+                jm = tm
+                jy = ty
+            }
+            normalized.contains("آخر ماه") -> {
+                val (ty, tm, _) = PersianCalendar.todayJalali()
+                jy = ty; jm = tm; jd = PersianCalendar.lastDayOfMonth(ty, tm)
+                displayDate = "آخر ماه"
             }
             relativeDayDigitMatch != null -> {
                 val offset = relativeDayDigitMatch.groupValues[1].toIntOrNull() ?: 0
@@ -141,6 +162,18 @@ object PersianInfoExtractor {
                 jy = y; jm = m; jd = d
                 displayDate = if (normalized.contains("امشب")) "امشب" else "امروز"
             }
+            normalized.contains("آخر هفته") -> {
+                // Iran's weekend is Friday — resolve to the nearest upcoming Friday
+                // (or today, if today already is Friday).
+                val fridayIdx = weekdayIndex["جمعه"]!!
+                val (ty, tm, td) = PersianCalendar.todayJalali()
+                val todayName = PersianCalendar.weekdayName(ty, tm, td)
+                val todayIdx = weekdayIndex[todayName] ?: 0
+                val offset = (fridayIdx - todayIdx + 7) % 7
+                val shifted = shiftJalaliDay(ty, tm, td, offset)
+                jy = shifted.first; jm = shifted.second; jd = shifted.third
+                displayDate = "آخر هفته"
+            }
             spokenWeekday != null -> {
                 val targetIdx = weekdayIndex[spokenWeekday]
                 if (targetIdx != null) {
@@ -149,6 +182,7 @@ object PersianInfoExtractor {
                     val todayIdx = weekdayIndex[todayName] ?: 0
                     var offset = (targetIdx - todayIdx + 7) % 7
                     if (offset == 0) offset = 7 // "سه‌شنبه" alone means the upcoming one, not today
+                    if (nextWeekMentioned) offset += 7 // "شنبه هفته‌ی آینده" -> skip one more cycle
                     val shifted = shiftJalaliDay(ty, tm, td, offset)
                     jy = shifted.first; jm = shifted.second; jd = shifted.third
                 }
@@ -247,8 +281,14 @@ object PersianInfoExtractor {
             PersianCalendar.toEpochMillis(jy, jm, jd, hour, minute)
         } else null
 
+        // Offline mode has no real summarization ability (no LLM), so the best
+        // available "what is this about" fallback is just the raw sentence itself,
+        // capped to a reasonable length for a single list-row line.
+        val offlineTitle = text.trim().let { if (it.length > 70) it.take(70).trimEnd() + "…" else it }
+
         return ExtractedAppointment(
             rawText = text.trim(),
+            title = offlineTitle,
             personName = person,
             location = location,
             jalaliYear = jy,

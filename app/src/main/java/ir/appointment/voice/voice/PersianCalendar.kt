@@ -93,6 +93,22 @@ object PersianCalendar {
         return gregorianToJalali(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH))
     }
 
+    /** Last valid day-of-month for a given Jalali year/month (handles Esfand's 29 vs 30 days). */
+    fun lastDayOfMonth(jy: Int, jm: Int): Int {
+        if (jm in 1..6) return 31
+        if (jm in 7..11) return 30
+        // Esfand (month 12): round-trip day 30 through Gregorian and back — if it
+        // survives as month 12 day 30, this Jalali year has a 30-day Esfand;
+        // otherwise it rolled into next year's Farvardin, meaning Esfand has 29.
+        return try {
+            val (gy, gm, gd) = jalaliToGregorian(jy, 12, 30)
+            val (backJy, backJm, backJd) = gregorianToJalali(gy, gm, gd)
+            if (backJy == jy && backJm == 12 && backJd == 30) 30 else 29
+        } catch (e: Exception) {
+            29
+        }
+    }
+
     fun gregorianToJalali(gy: Int, gm: Int, gd: Int): Triple<Int, Int, Int> {
         val gDaysInMonth = intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
         val leap = (gy % 4 == 0 && gy % 100 != 0) || gy % 400 == 0
@@ -129,6 +145,13 @@ object PersianCalendar {
                 break
             }
             jDayNo -= jDaysInMonth[i]
+        }
+        if (jm == 0) {
+            // Falls through only for the 366th day of a leap Jalali year, which
+            // the fixed 365-day month table above has no slot for — that day is
+            // Esfand 30.
+            jm = 12
+            jd = 30
         }
         return Triple(jy, jm, jd)
     }

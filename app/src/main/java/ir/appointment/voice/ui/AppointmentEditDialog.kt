@@ -26,6 +26,7 @@ fun AppointmentEditDialog(
     onSave: (AppointmentEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var title by remember { mutableStateOf(appointment.title ?: "") }
     var day by remember { mutableStateOf(appointment.jalaliDay?.toString() ?: "") }
     var monthIndex by remember { mutableStateOf(appointment.jalaliMonth?.let { it - 1 } ?: -1) }
     var year by remember { mutableStateOf(appointment.jalaliYear?.toString() ?: "") }
@@ -54,6 +55,7 @@ fun AppointmentEditDialog(
         val sortTs = if (jy != null && jm != null && jd != null) PersianCalendar.toEpochMillis(jy, jm, jd, h, m) else null
 
         return appointment.copy(
+            title = title.trim().ifBlank { null },
             personName = person.trim().ifBlank { null },
             location = location.trim().ifBlank { null },
             jalaliYear = jy,
@@ -70,9 +72,17 @@ fun AppointmentEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ویرایش قرار ملاقات", fontWeight = FontWeight.Bold) },
+        title = { Text("ویرایش", fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("موضوع / کاری که باید انجام شود") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(14.dp))
                 Text("تاریخ", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
