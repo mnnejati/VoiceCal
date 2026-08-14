@@ -64,8 +64,10 @@ object PersianInfoExtractor {
 
         val person = extractAfterKeyword(normalized, listOf("با آقای", "با خانم", "با دکتر", "با"))
             ?: extractPersonByTitle(normalized)
+            ?: extractPersonSuffixTitle(normalized)
         val location = extractAfterKeyword(normalized, listOf("در محل", "در آدرس", "در"))
             ?: extractLocationAfterGoVerb(normalized)
+            ?: extractLocationByKeyword(normalized)
 
         // Longer names first — "شنبه" is a suffix of "پنجشنبه"/"یکشنبه"/"دوشنبه" etc,
         // so without this ordering the short form would incorrectly match first.
@@ -180,9 +182,15 @@ object PersianInfoExtractor {
                     val (ty, tm, td) = PersianCalendar.todayJalali()
                     val todayName = PersianCalendar.weekdayName(ty, tm, td)
                     val todayIdx = weekdayIndex[todayName] ?: 0
-                    var offset = (targetIdx - todayIdx + 7) % 7
-                    if (offset == 0) offset = 7 // "سه‌شنبه" alone means the upcoming one, not today
-                    if (nextWeekMentioned) offset += 7 // "شنبه هفته‌ی آینده" -> skip one more cycle
+                    val baseOffset = (targetIdx - todayIdx + 7) % 7
+                    // "هفته‌ی آینده" means literally next week's occurrence, so it must
+                    // NOT also apply the separate "skip today if it matches" rule below
+                    // (stacking both was double-counting a week).
+                    val offset = when {
+                        nextWeekMentioned -> baseOffset + 7
+                        baseOffset == 0 -> 7 // "سه‌شنبه" alone means the upcoming one, not today
+                        else -> baseOffset
+                    }
                     val shifted = shiftJalaliDay(ty, tm, td, offset)
                     jy = shifted.first; jm = shifted.second; jd = shifted.third
                 }
@@ -233,6 +241,13 @@ object PersianInfoExtractor {
         val bareTimeWordRegex = Regex("""(?<!ساعت\s)($hourWordPattern)\s+و\s+(نیم|ربع\s+کم|کم\s+ربع|ربع)""")
         val bareTimeWordMatch = bareTimeWordRegex.find(normalized)
 
+        // "نه صبح"، "هشت شب" — bare hour + time-of-day marker, no "ساعت" and no "و".
+        val bareTimeOfDayWordRegex = Regex("""(?<!ساعت\s)($hourWordPattern)\s+(صبح|ظهر|عصر|شب)""")
+        val bareTimeOfDayWordMatch = bareTimeOfDayWordRegex.find(normalized)
+
+        val bareTimeOfDayDigitRegex = Regex("""(?<!ساعت\s)(\d{1,2})\s+(صبح|ظهر|عصر|شب)""")
+        val bareTimeOfDayDigitMatch = bareTimeOfDayDigitRegex.find(normalized)
+
         when {
             timeColonMatch != null -> {
                 hour = timeColonMatch.groupValues[1].toIntOrNull()
@@ -262,11 +277,22 @@ object PersianInfoExtractor {
                 hour = timeNumMatch.groupValues[1].toIntOrNull()
                 minute = 0
             }
+            bareTimeOfDayWordMatch != null -> {
+                hour = wordNumbers[bareTimeOfDayWordMatch.groupValues[1]]
+                minute = 0
+            }
+            bareTimeOfDayDigitMatch != null -> {
+                hour = bareTimeOfDayDigitMatch.groupValues[1].toIntOrNull()
+                minute = 0
+            }
         }
 
         if (hour != null) {
-            // Adjust for بعد از ظهر / عصر / شب (PM) vs صبح (AM)
-            val isPm = normalized.contains("بعد از ظهر") || normalized.contains("عصر") || normalized.contains("شب")
+            // Adjust for بعد از ظهر / بعد ازظهر / بعدازظهر / عصر / شب (PM) vs صبح (AM).
+            // Using a spacing-flexible regex here because colloquial speech (and
+            // speech-to-text output) often drops the space: "بعد ازظهر"/"بعدازظهر".
+            val isPm = Regex("""بعد\s*از\s*ظهر""").containsMatchIn(normalized) ||
+                normalized.contains("عصر") || normalized.contains("شب")
             if (isPm && hour in 1..11) hour += 12
             if (minute != null && minute!! < 0) {
                 // "ربع کم" = quarter to -> reduce hour by 1, minute = 45
@@ -281,14 +307,13 @@ object PersianInfoExtractor {
             PersianCalendar.toEpochMillis(jy, jm, jd, hour, minute)
         } else null
 
-        // Offline mode has no real summarization ability (no LLM), so the best
-        // available "what is this about" fallback is just the raw sentence itself,
-        // capped to a reasonable length for a single list-row line.
-        val offlineTitle = text.trim().let { if (it.length > 70) it.take(70).trimEnd() + "…" else it }
-
+        // No offline summarization: real "what is this about" summarization needs
+        // an LLM (only available in online mode). Leaving title null here means the
+        // preview dialog shows an empty, editable box for the user to fill in by
+        // hand instead of showing something misleadingly labeled as a summary.
         return ExtractedAppointment(
             rawText = text.trim(),
-            title = offlineTitle,
+            title = null,
             personName = person,
             location = location,
             jalaliYear = jy,
@@ -359,11 +384,15 @@ object PersianInfoExtractor {
     /**
      * Fallback for a person mentioned by title without the "با" preposition, e.g.
      * "نوبت دکتر احمدی دارم" (no "با" at all — "با" extraction alone can't catch this).
-     * A title word (دکتر/آقای/خانم/استاد/مهندس) is a strong standalone signal of a
-     * person's name, wherever it appears in the sentence.
+     * A title word is a strong standalone signal of a person's name, wherever it
+     * appears in the sentence. Longer/multi-word titles are checked first so e.g.
+     * "جناب آقای" isn't shadowed by the shorter "آقای".
      */
     private fun extractPersonByTitle(text: String): String? {
-        val titles = listOf("دکتر", "آقای", "خانم", "استاد", "مهندس")
+        val titles = listOf(
+            "دکتر", "آقای", "خانم", "استاد", "مهندس", "مدیر", "مربی", "معلم",
+            "دندانپزشک", "پزشک", "همکار", "جناب آقای", "جناب", "حاجی", "حاج آقا", "حاجیه خانم"
+        ).sortedByDescending { it.length }
         for (title in titles) {
             val name = extractAfterKeyword(text, listOf(title), maxWords = 2)
             if (name != null) return "$title $name"
@@ -371,9 +400,52 @@ object PersianInfoExtractor {
         return null
     }
 
+    /**
+     * Colloquial Persian often puts آقا/خانم AFTER the name instead of using a
+     * formal prefix: "علی آقا"، "مریم خانم"، "حاجیه خانم". Requires the preceding
+     * word to look like an actual name (not a common function word) to avoid
+     * false positives like "با آقا" being captured.
+     */
+    private fun extractPersonSuffixTitle(text: String): String? {
+        val nonNameWords = setOf(
+            "با", "به", "برای", "در", "از", "که", "این", "آن", "یک", "دو", "سه",
+            "تا", "را", "هم", "و", "یا"
+        )
+        val regex = Regex("""([\u0600-\u06FF]{2,})\s+(آقا|خانم)(?:\s|$)""")
+        for (match in regex.findAll(text)) {
+            val name = match.groupValues[1]
+            if (name in nonNameWords) continue
+            return "$name ${match.groupValues[2]}"
+        }
+        return null
+    }
+
     private fun extractLocationAfterGoVerb(text: String): String? {
         val goVerbs = listOf("می‌روم", "میرم", "برم", "بروم", "می‌رم")
         return extractAfterKeyword(text, goVerbs, maxWords = 2)
+    }
+
+    // Common place-type nouns — if any of these appears anywhere as a standalone
+    // word, it's a strong enough signal on its own to be the location, even
+    // without a "در"/go-verb trigger word nearby (e.g. "باید خونه باشم").
+    private val locationKeywords = listOf(
+        "اداره", "شرکت", "ساختمان", "خونه", "خانه", "مطب", "باشگاه", "آرایشگاه",
+        "کارگاه", "ویلا", "باغ", "خیابان", "فرودگاه", "هتل", "کافه", "پارک",
+        "ایستگاه مترو", "ایستگاه اتوبوس", "ایستگاه", "مترو", "پاساژ", "کتابخونه",
+        "کتابخانه", "میدان", "کوه", "دفتر کار", "دفتر", "کلینیک", "بیمارستان",
+        "درمانگاه", "مدرسه", "مسجد", "کافی شاپ", "استخر", "ورزشگاه", "بوتیک",
+        "نمایشگاه", "بازار", "تعمیرگاه", "سالن آرایش", "دانشگاه", "دندانپزشکی"
+    ).sortedByDescending { it.length }
+
+    private fun extractLocationByKeyword(text: String): String? {
+        for (kw in locationKeywords) {
+            val idx = text.indexOf(kw)
+            if (idx < 0) continue
+            val precededOk = idx == 0 || text[idx - 1].isWhitespace()
+            val followedOk = idx + kw.length >= text.length || text[idx + kw.length].isWhitespace()
+            if (precededOk && followedOk) return kw
+        }
+        return null
     }
 
     private fun normalizeDigits(input: String): String {

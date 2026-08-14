@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -263,28 +265,8 @@ private fun AppointmentRow(
             Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                if (!appointment.title.isNullOrBlank()) {
-                    Text(
-                        text = appointment.title,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = TextPrimary,
-                        maxLines = 2
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = buildAnnotatedString {
-                            withStyle(SpanStyle(fontWeight = FontWeight.Medium, fontSize = 12.5.sp, color = TextSecondary)) {
-                                append(appointment.displayDate ?: "تاریخ نامشخص")
-                            }
-                            if (!appointment.weekdayName.isNullOrBlank()) {
-                                withStyle(SpanStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, color = TextSecondary)) {
-                                    append("  (${appointment.weekdayName})")
-                                }
-                            }
-                        }
-                    )
-                } else {
+                // Date + weekday + time, always on a single horizontal line.
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = buildAnnotatedString {
                             withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)) {
@@ -295,31 +277,33 @@ private fun AppointmentRow(
                                     append("  (${appointment.weekdayName})")
                                 }
                             }
-                        }
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-                }
 
-                if (!appointment.displayTime.isNullOrBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Surface(
-                        color = VividPurple.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.wrapContentWidth()
-                    ) {
-                        Text(
-                            text = appointment.displayTime,
-                            color = VividPurple,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
+                    if (!appointment.displayTime.isNullOrBlank()) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            color = VividPurple.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = appointment.displayTime,
+                                color = VividPurple,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(4.dp))
-
                 if (!appointment.location.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.LocationOn, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
@@ -327,19 +311,30 @@ private fun AppointmentRow(
                     }
                 }
                 if (!appointment.personName.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(appointment.personName, fontSize = 13.sp, color = TextSecondary)
                     }
                 }
+                if (!appointment.title.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Assignment, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(appointment.title, fontSize = 13.sp, color = TextSecondary)
+                    }
+                }
             }
 
-            IconButton(onClick = onEditRequest) {
-                Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = VividPurple)
-            }
-            IconButton(onClick = onDeleteRequest) {
-                Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = DangerRed)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(onClick = onDeleteRequest) {
+                    Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = DangerRed)
+                }
+                IconButton(onClick = onEditRequest) {
+                    Icon(Icons.Filled.Edit, contentDescription = "ویرایش", tint = VividPurple)
+                }
             }
         }
     }
