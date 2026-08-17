@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
@@ -30,10 +31,13 @@ fun SettingsDialog(
     currentAlarmEnabled: Boolean,
     currentAlarmSoundUri: String,
     currentAlarmDurationSeconds: Int,
+    currentReminderLeadMinutes: Int,
     onPickAlarmSound: (current: String, onPicked: (String) -> Unit) -> Unit,
     isIgnoringBatteryOptimizations: Boolean,
     onRequestIgnoreBatteryOptimizations: () -> Unit,
-    onSave: (RecognitionMode, String, Boolean, String, Int) -> Unit,
+    canScheduleExactAlarms: Boolean,
+    onRequestExactAlarmPermission: () -> Unit,
+    onSave: (RecognitionMode, String, Boolean, String, Int, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     var mode by remember { mutableStateOf(currentMode) }
@@ -41,6 +45,7 @@ fun SettingsDialog(
     var alarmEnabled by remember { mutableStateOf(currentAlarmEnabled) }
     var alarmSoundUri by remember { mutableStateOf(currentAlarmSoundUri) }
     var alarmDurationText by remember { mutableStateOf(currentAlarmDurationSeconds.toString()) }
+    var reminderLeadText by remember { mutableStateOf(currentReminderLeadMinutes.toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -121,7 +126,19 @@ fun SettingsDialog(
 
                 if (alarmEnabled) {
                     Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = reminderLeadText,
+                        onValueChange = { reminderLeadText = it.filter(Char::isDigit).take(4) },
+                        label = { Text("چند دقیقه قبل از زمان قرار یادآوری شود") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Filled.AccessTime, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text("پیش‌فرض ۳۰ دقیقه؛ عدد صفر یعنی دقیقاً همان لحظه‌ی شروع.", fontSize = 11.sp, color = TextSecondary)
 
+                    Spacer(Modifier.height(10.dp))
                     OutlinedButton(
                         onClick = {
                             onPickAlarmSound(alarmSoundUri) { picked -> alarmSoundUri = picked }
@@ -162,6 +179,24 @@ fun SettingsDialog(
                             color = TextSecondary
                         )
                     }
+
+                    if (!canScheduleExactAlarms) {
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = onRequestExactAlarmPermission,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("فعال‌کردن دقت بالای آلارم", fontSize = 13.sp)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "با این مجوز، یادآوری دقیقاً سر همان دقیقه‌ی تعیین‌شده اجرا می‌شود؛ بدون آن ممکن است چند دقیقه دیرتر برسد.",
+                            fontSize = 10.5.sp,
+                            color = TextSecondary
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(18.dp))
@@ -170,9 +205,9 @@ fun SettingsDialog(
 
                 Text("درباره‌ی برنامه", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
                 Spacer(Modifier.height(6.dp))
-                Text("دستیار قرار ملاقات", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("VoiceCal", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(2.dp))
-                Text("نسخه ۱.۰  •  آخرین بیلد: ${BuildConfig.BUILD_DATE}", fontSize = 11.5.sp, color = TextSecondary)
+                Text("نسخه ${BuildConfig.VERSION_NAME}  •  آخرین بیلد: ${BuildConfig.BUILD_DATE}", fontSize = 11.5.sp, color = TextSecondary)
                 Spacer(Modifier.height(6.dp))
                 Text("توسعه‌دهنده: M.Nejati", fontSize = 12.5.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
 
@@ -188,7 +223,8 @@ fun SettingsDialog(
         confirmButton = {
             TextButton(onClick = {
                 val duration = alarmDurationText.toIntOrNull()?.coerceIn(3, 120) ?: 15
-                onSave(mode, apiKey, alarmEnabled, alarmSoundUri, duration)
+                val lead = reminderLeadText.toIntOrNull()?.coerceIn(0, 1440) ?: 30
+                onSave(mode, apiKey, alarmEnabled, alarmSoundUri, duration, lead)
             }) {
                 Text("ذخیره", color = AccentTeal, fontWeight = FontWeight.Bold)
             }

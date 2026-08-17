@@ -18,7 +18,11 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        // Auto-increments with every GitHub Actions build via the built-in
+        // GITHUB_RUN_NUMBER env var (always provided by Actions, no secret
+        // needed) — e.g. 1.1, 1.2, 1.3... Falls back to "1.0-dev" for local
+        // builds run outside CI.
+        versionName = "1." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0-dev")
 
         // Auto-populated with the actual date this APK was built, so the "About"
         // screen can always show an accurate "last updated" date without

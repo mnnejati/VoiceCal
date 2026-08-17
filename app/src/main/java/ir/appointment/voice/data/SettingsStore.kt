@@ -52,11 +52,19 @@ class SettingsStore(context: Context) {
             prefs.edit().putBoolean(KEY_ALARM_ENABLED, value).apply()
         }
 
+    /** How many minutes before the appointment/task time the reminder fires. */
+    var reminderLeadMinutes: Int
+        get() = prefs.getInt(KEY_REMINDER_LEAD, 30)
+        set(value) {
+            prefs.edit().putInt(KEY_REMINDER_LEAD, value.coerceIn(0, 1440)).apply()
+        }
+
     companion object {
         private const val KEY_MODE = "recognition_mode"
         private const val KEY_API_KEY = "groq_api_key"
         private const val KEY_ALARM_SOUND = "alarm_sound_uri"
         private const val KEY_ALARM_DURATION = "alarm_duration_seconds"
         private const val KEY_ALARM_ENABLED = "alarm_enabled"
+        private const val KEY_REMINDER_LEAD = "reminder_lead_minutes"
     }
 }

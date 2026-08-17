@@ -9,6 +9,7 @@ import ir.appointment.voice.data.AppointmentRepository
 import ir.appointment.voice.data.RecognitionMode
 import ir.appointment.voice.data.SettingsStore
 import ir.appointment.voice.notification.ReminderScheduler
+import ir.appointment.voice.voice.AudioAnalysis
 import ir.appointment.voice.voice.AudioCompressor
 import ir.appointment.voice.voice.AudioPlayerManager
 import ir.appointment.voice.voice.ExtractedAppointment
@@ -85,6 +86,9 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     private val _alarmEnabled = MutableStateFlow(settings.alarmEnabled)
     val alarmEnabled: StateFlow<Boolean> = _alarmEnabled
 
+    private val _reminderLeadMinutes = MutableStateFlow(settings.reminderLeadMinutes)
+    val reminderLeadMinutes: StateFlow<Int> = _reminderLeadMinutes
+
     private val undoJobs = mutableMapOf<Long, Job>()
 
     data class PendingPreview(val extracted: ExtractedAppointment, val audioFilePath: String)
@@ -96,13 +100,15 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         _apiKey.value = key
     }
 
-    fun updateAlarmSettings(enabled: Boolean, soundUri: String, durationSeconds: Int) {
+    fun updateAlarmSettings(enabled: Boolean, soundUri: String, durationSeconds: Int, leadMinutes: Int) {
         settings.alarmEnabled = enabled
         settings.alarmSoundUri = soundUri
         settings.alarmDurationSeconds = durationSeconds
+        settings.reminderLeadMinutes = leadMinutes
         _alarmEnabled.value = enabled
         _alarmSoundUri.value = soundUri
         _alarmDurationSeconds.value = settings.alarmDurationSeconds
+        _reminderLeadMinutes.value = settings.reminderLeadMinutes
     }
 
     fun startRecording() {
@@ -131,6 +137,14 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
             val audioPath = withContext(Dispatchers.IO) { engine?.stop() }
             if (audioPath == null) {
                 _userMessage.value = UserMessage("صدایی ضبط نشد. دوباره امتحان کنید.")
+                _recordingState.value = RecordingState.IDLE
+                return@launch
+            }
+
+            val silent = withContext(Dispatchers.IO) { AudioAnalysis.isSilent(audioPath) }
+            if (silent) {
+                _userMessage.value = UserMessage("صدایی شنیده نشد (سکوت). دوباره امتحان کنید.")
+                java.io.File(audioPath).delete()
                 _recordingState.value = RecordingState.IDLE
                 return@launch
             }

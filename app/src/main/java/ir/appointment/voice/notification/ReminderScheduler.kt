@@ -4,22 +4,32 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import ir.appointment.voice.data.SettingsStore
 
 /**
- * Schedules a reminder 30 minutes before an appointment using AlarmManager.
+ * Schedules a reminder some configurable number of minutes before an
+ * appointment/task using AlarmManager.
  *
- * Deliberately uses `setAndAllowWhileIdle` (inexact, "best effort within a short
- * window") rather than `setExactAndAllowWhileIdle`, so no special
- * SCHEDULE_EXACT_ALARM permission / settings round-trip is required. A reminder
- * firing within a couple of minutes of the target time is perfectly fine for an
- * appointment use case.
+ * Uses `setExactAndAllowWhileIdle` (precise, fires within a second or two of the
+ * target time) whenever the app has been granted the SCHEDULE_EXACT_ALARM
+ * privilege — a special "app op" the user must explicitly allow via system
+ * settings on Android 12+ (see [canScheduleExact] / the Settings screen's
+ * "دقت بالای آلارم" button). If it hasn't been granted, this transparently falls
+ * back to `setAndAllowWhileIdle` (inexact, best-effort within a short window) so
+ * reminders still work — just without to-the-second precision.
  */
 object ReminderScheduler {
 
-    private const val LEAD_TIME_MILLIS = 30 * 60 * 1000L // 30 minutes before
+    fun canScheduleExact(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true // no restriction before Android 12
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return alarmManager.canScheduleExactAlarms()
+    }
 
     fun schedule(context: Context, appointmentId: Long, appointmentTimeMillis: Long, label: String) {
-        val triggerAt = appointmentTimeMillis - LEAD_TIME_MILLIS
+        val leadMillis = SettingsStore(context).reminderLeadMinutes * 60_000L
+        val triggerAt = appointmentTimeMillis - leadMillis
         val now = System.currentTimeMillis()
         // If the lead time has already passed but the appointment itself is still
         // in the future, remind immediately-ish (a few seconds out) instead of skipping.
@@ -42,9 +52,18 @@ object ReminderScheduler {
         )
 
         try {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, effectiveTrigger, pendingIntent)
+            if (canScheduleExact(context)) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, effectiveTrigger, pendingIntent)
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, effectiveTrigger, pendingIntent)
+            }
         } catch (_: SecurityException) {
-            // Extremely defensive; setAndAllowWhileIdle normally needs no permission.
+            // Permission was revoked between the check and the call (rare race) —
+            // fall back to inexact rather than losing the reminder entirely.
+            try {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, effectiveTrigger, pendingIntent)
+            } catch (_: SecurityException) {
+            }
         }
     }
 

@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import ir.appointment.voice.notification.NotificationHelper
+import ir.appointment.voice.notification.ReminderScheduler
 import ir.appointment.voice.ui.AppointmentListScreen
 import ir.appointment.voice.ui.RecordScreen
 import ir.appointment.voice.ui.theme.AppointmentVoiceTheme
@@ -47,6 +48,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private val requestIgnoreBatteryOptimizations = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { /* whether granted or not, nothing else to do here */ }
+
+    private val requestExactAlarmPermission = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { /* whether granted or not, nothing else to do here */ }
 
@@ -87,6 +92,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** On Android 12+, precise ("exact") alarm scheduling requires this special
+     * permission, granted only via a system settings screen — this opens it
+     * directly so the reminder can fire within seconds of the target time
+     * instead of the looser "sometime in the next few minutes" default. */
+    private fun requestExactAlarmExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        if (ReminderScheduler.canScheduleExact(this)) return
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            requestExactAlarmPermission.launch(intent)
+        } catch (_: Exception) {
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -109,7 +130,9 @@ class MainActivity : ComponentActivity() {
                         onShowAppointments = { screen = Screen.LIST },
                         onPickAlarmSound = { current, onPicked -> launchRingtonePicker(current, onPicked) },
                         isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations(),
-                        onRequestIgnoreBatteryOptimizations = { requestBatteryOptimizationExemption() }
+                        onRequestIgnoreBatteryOptimizations = { requestBatteryOptimizationExemption() },
+                        canScheduleExactAlarms = ReminderScheduler.canScheduleExact(this@MainActivity),
+                        onRequestExactAlarmPermission = { requestExactAlarmExemption() }
                     )
                     Screen.LIST -> {
                         BackHandler { screen = Screen.RECORD }

@@ -38,7 +38,9 @@ fun RecordScreen(
     onShowAppointments: () -> Unit,
     onPickAlarmSound: (current: String, onPicked: (String) -> Unit) -> Unit,
     isIgnoringBatteryOptimizations: Boolean,
-    onRequestIgnoreBatteryOptimizations: () -> Unit
+    onRequestIgnoreBatteryOptimizations: () -> Unit,
+    canScheduleExactAlarms: Boolean,
+    onRequestExactAlarmPermission: () -> Unit
 ) {
     val recordingState by viewModel.recordingState.collectAsState()
     val preview by viewModel.pendingPreview.collectAsState()
@@ -48,6 +50,7 @@ fun RecordScreen(
     val alarmSoundUri by viewModel.alarmSoundUri.collectAsState()
     val alarmDurationSeconds by viewModel.alarmDurationSeconds.collectAsState()
     val alarmEnabled by viewModel.alarmEnabled.collectAsState()
+    val reminderLeadMinutes by viewModel.reminderLeadMinutes.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     var showSettings by remember { mutableStateOf(false) }
 
@@ -220,12 +223,15 @@ fun RecordScreen(
             currentAlarmEnabled = alarmEnabled,
             currentAlarmSoundUri = alarmSoundUri,
             currentAlarmDurationSeconds = alarmDurationSeconds,
+            currentReminderLeadMinutes = reminderLeadMinutes,
             onPickAlarmSound = onPickAlarmSound,
             isIgnoringBatteryOptimizations = isIgnoringBatteryOptimizations,
             onRequestIgnoreBatteryOptimizations = onRequestIgnoreBatteryOptimizations,
-            onSave = { mode, key, enabled, soundUri, durationSeconds ->
+            canScheduleExactAlarms = canScheduleExactAlarms,
+            onRequestExactAlarmPermission = onRequestExactAlarmPermission,
+            onSave = { mode, key, enabled, soundUri, durationSeconds, leadMinutes ->
                 viewModel.updateSettings(mode, key)
-                viewModel.updateAlarmSettings(enabled, soundUri, durationSeconds)
+                viewModel.updateAlarmSettings(enabled, soundUri, durationSeconds, leadMinutes)
                 showSettings = false
             },
             onDismiss = { showSettings = false }
