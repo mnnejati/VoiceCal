@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.appointment.voice.data.RecognitionMode
 import ir.appointment.voice.ui.components.PulsingMicIcon
+import ir.appointment.voice.ui.components.WaveformVisualizer
 import ir.appointment.voice.ui.theme.AccentTeal
 import ir.appointment.voice.ui.theme.DangerRed
 import ir.appointment.voice.ui.theme.DeepIndigo
@@ -43,6 +44,7 @@ fun RecordScreen(
     onRequestExactAlarmPermission: () -> Unit
 ) {
     val recordingState by viewModel.recordingState.collectAsState()
+    val amplitude by viewModel.amplitude.collectAsState()
     val preview by viewModel.pendingPreview.collectAsState()
     val userMessage by viewModel.userMessage.collectAsState()
     val recognitionMode by viewModel.recognitionMode.collectAsState()
@@ -107,7 +109,15 @@ fun RecordScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 PulsingMicIcon(active = recordingState == RecordingState.RECORDING)
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(14.dp))
+
+                WaveformVisualizer(
+                    amplitude = amplitude,
+                    active = recordingState == RecordingState.RECORDING,
+                    modifier = Modifier.fillMaxWidth(0.75f)
+                )
+
+                Spacer(Modifier.height(6.dp))
 
                 when (recordingState) {
                     RecordingState.RECORDING -> {

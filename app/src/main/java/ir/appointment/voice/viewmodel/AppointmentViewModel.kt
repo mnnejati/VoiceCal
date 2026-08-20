@@ -57,6 +57,9 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     private val _recordingState = MutableStateFlow(RecordingState.IDLE)
     val recordingState: StateFlow<RecordingState> = _recordingState
 
+    private val _amplitude = MutableStateFlow(0f)
+    val amplitude: StateFlow<Float> = _amplitude
+
     private val _pendingPreview = MutableStateFlow<PendingPreview?>(null)
     val pendingPreview: StateFlow<PendingPreview?> = _pendingPreview
 
@@ -114,7 +117,9 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     fun startRecording() {
         if (_recordingState.value != RecordingState.IDLE) return
 
+        _amplitude.value = 0f
         val engine = VoiceCaptureEngine(getApplication())
+        engine.onAmplitude = { level -> _amplitude.value = level }
         captureEngine = engine
         try {
             engine.start()
@@ -129,6 +134,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     fun stopRecordingAndProcess() {
         if (_recordingState.value != RecordingState.RECORDING) return
         _recordingState.value = RecordingState.TRANSCRIBING
+        _amplitude.value = 0f
 
         val engine = captureEngine
         captureEngine = null
@@ -308,6 +314,7 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
         captureEngine?.cancel()
         captureEngine = null
         _recordingState.value = RecordingState.IDLE
+        _amplitude.value = 0f
     }
 
     fun discardPreview() {

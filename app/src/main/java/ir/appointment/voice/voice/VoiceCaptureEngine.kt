@@ -38,6 +38,15 @@ class VoiceCaptureEngine(private val context: Context) {
     var currentFilePath: String? = null
         private set
 
+    /** Emits a normalized 0f..1f loudness level a few times per second while
+     * recording, for a live waveform display. Computing this is cheap (a single
+     * pass over each small audio chunk already being read) and callbacks are
+     * throttled so they can't flood the UI thread. */
+    @Volatile var onAmplitude: ((Float) -> Unit)? = null
+
+    private var lastAmplitudeEmitAt = 0L
+    private val amplitudeEmitIntervalMs = 60L // ~16 updates/sec, smooth but cheap
+
     @SuppressLint("MissingPermission") // caller guarantees RECORD_AUDIO was granted
     fun start() {
         val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
@@ -73,9 +82,29 @@ class VoiceCaptureEngine(private val context: Context) {
                     synchronized(pcmBuffer) {
                         pcmBuffer.write(chunk, 0, read)
                     }
+                    emitAmplitudeIfDue(chunk, read)
                 }
             }
         }
+    }
+
+    private fun emitAmplitudeIfDue(chunk: ByteArray, length: Int) {
+        val callback = onAmplitude ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastAmplitudeEmitAt < amplitudeEmitIntervalMs) return
+        lastAmplitudeEmitAt = now
+
+        var peak = 0
+        var i = 0
+        while (i + 1 < length) {
+            val lo = chunk[i].toInt() and 0xFF
+            val hi = chunk[i + 1].toInt()
+            val sample = kotlin.math.abs((hi shl 8) or lo)
+            if (sample > peak) peak = sample
+            i += 2
+        }
+        val normalized = (peak / 32768f).coerceIn(0f, 1f)
+        callback(normalized)
     }
 
     /** Stops capture and writes the WAV file. Returns its path, or null if nothing was captured. */
