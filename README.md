@@ -1,4 +1,7 @@
-# 🎙️ VoiceCal <img src="docs/images/voicecal-icon.png" width="100">
+<img src="./docs/images/voicecal-icon.png" width="110">
+
+# VoiceCal
+
 # تقویم قرار با فرمان صوتی فارسی
 
 اپلیکیشن اندرویدی برای ثبت قرار ملاقات ها و یادآوری ها با **فرمان صوتی فارسی**. <br> 
