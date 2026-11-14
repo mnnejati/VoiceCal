@@ -19,6 +19,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.appointment.voice.BuildConfig
+import ir.appointment.voice.data.OnlineProvider
 import ir.appointment.voice.data.RecognitionMode
 import ir.appointment.voice.ui.theme.AccentTeal
 import ir.appointment.voice.ui.theme.TextSecondary
@@ -27,7 +28,10 @@ import ir.appointment.voice.voice.ModelInfo
 @Composable
 fun SettingsDialog(
     currentMode: RecognitionMode,
+    currentProvider: OnlineProvider,
     currentApiKey: String,
+    currentGeminiKey: String,
+    currentElevenLabsKey: String,
     currentAlarmEnabled: Boolean,
     currentAlarmSoundUri: String,
     currentAlarmDurationSeconds: Int,
@@ -37,11 +41,14 @@ fun SettingsDialog(
     onRequestIgnoreBatteryOptimizations: () -> Unit,
     canScheduleExactAlarms: Boolean,
     onRequestExactAlarmPermission: () -> Unit,
-    onSave: (RecognitionMode, String, Boolean, String, Int, Int) -> Unit,
+    onSave: (RecognitionMode, OnlineProvider, String, String, String, Boolean, String, Int, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     var mode by remember { mutableStateOf(currentMode) }
+    var provider by remember { mutableStateOf(currentProvider) }
     var apiKey by remember { mutableStateOf(currentApiKey) }
+    var geminiKey by remember { mutableStateOf(currentGeminiKey) }
+    var elevenLabsKey by remember { mutableStateOf(currentElevenLabsKey) }
     var alarmEnabled by remember { mutableStateOf(currentAlarmEnabled) }
     var alarmSoundUri by remember { mutableStateOf(currentAlarmSoundUri) }
     var alarmDurationText by remember { mutableStateOf(currentAlarmDurationSeconds.toString()) }
@@ -87,22 +94,71 @@ fun SettingsDialog(
 
                 if (mode == RecognitionMode.ONLINE) {
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = { apiKey = it },
-                        label = { Text("کلید API از Groq") },
-                        placeholder = { Text("gsk_...") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Text("سرویس تبدیل گفتار به متن (آنلاین)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                    Spacer(Modifier.height(2.dp))
+
+                    ProviderOption(provider == OnlineProvider.GROQ, { provider = OnlineProvider.GROQ }, "Groq — Whisper Large v3", "سریع و رایگان؛ دقت فارسی متوسط.")
+                    ProviderOption(provider == OnlineProvider.GEMINI, { provider = OnlineProvider.GEMINI }, "Google Gemini", "دقت فارسی بهتر؛ کلید رایگان از aistudio.google.com/apikey (سهمیه‌ی روزانه‌ی محدود).")
+                    ProviderOption(provider == OnlineProvider.ELEVENLABS, { provider = OnlineProvider.ELEVENLABS }, "ElevenLabs — Scribe v2", "دقت فارسی بالا؛ کلید از elevenlabs.io (سطح رایگان: سهمیه‌ی ماهانه، فقط استفاده‌ی غیرتجاری).")
+
+                    Spacer(Modifier.height(8.dp))
+                    when (provider) {
+                        OnlineProvider.GROQ -> OutlinedTextField(
+                            value = apiKey,
+                            onValueChange = { apiKey = it },
+                            label = { Text("کلید API از Groq") },
+                            placeholder = { Text("gsk_...") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OnlineProvider.GEMINI -> OutlinedTextField(
+                            value = geminiKey,
+                            onValueChange = { geminiKey = it },
+                            label = { Text("کلید API از Google AI Studio") },
+                            placeholder = { Text("AIza...") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OnlineProvider.ELEVENLABS -> OutlinedTextField(
+                            value = elevenLabsKey,
+                            onValueChange = { elevenLabsKey = it },
+                            label = { Text("کلید API از ElevenLabs") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "کلید رایگان را از console.groq.com/keys بسازید (نیازی به کارت بانکی نیست). فقط روی همین گوشی و به‌صورت محلی ذخیره می‌شود.",
+                        "کلیدها فقط روی همین گوشی و به‌صورت محلی ذخیره می‌شوند. کلید Groq رایگان را از console.groq.com/keys بسازید.",
                         fontSize = 11.sp,
                         color = TextSecondary
                     )
+
+                    if (provider != OnlineProvider.GROQ) {
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = apiKey,
+                            onValueChange = { apiKey = it },
+                            label = { Text("کلید Groq (برای استخراج هوشمند اطلاعات — اختیاری)") },
+                            placeholder = { Text("gsk_...") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "استخراج تاریخ/ساعت/محل/شخص/موضوع همچنان با مدل زبانی Groq انجام می‌شود. بدون کلید Groq، فقط استخراج ساده‌ی آفلاین کار می‌کند و فیلد «موضوع» خالی می‌ماند.",
+                            fontSize = 11.sp,
+                            color = TextSecondary
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(18.dp))
@@ -215,7 +271,7 @@ fun SettingsDialog(
                     Spacer(Modifier.height(10.dp))
                     Text("مدل‌های آنلاین مورد استفاده:", fontSize = 11.5.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(3.dp))
-                    Text("• تشخیص گفتار: ${ModelInfo.TRANSCRIPTION_MODEL_DISPLAY}", fontSize = 11.sp, color = TextSecondary)
+                    Text("• تشخیص گفتار: ${ModelInfo.transcriptionDisplay(provider)}", fontSize = 11.sp, color = TextSecondary)
                     Text("• استخراج اطلاعات: ${ModelInfo.EXTRACTION_MODEL_DISPLAY}", fontSize = 11.sp, color = TextSecondary)
                 }
             }
@@ -224,7 +280,7 @@ fun SettingsDialog(
             TextButton(onClick = {
                 val duration = alarmDurationText.toIntOrNull()?.coerceIn(3, 120) ?: 15
                 val lead = reminderLeadText.toIntOrNull()?.coerceIn(0, 1440) ?: 30
-                onSave(mode, apiKey, alarmEnabled, alarmSoundUri, duration, lead)
+                onSave(mode, provider, apiKey, geminiKey, elevenLabsKey, alarmEnabled, alarmSoundUri, duration, lead)
             }) {
                 Text("ذخیره", color = AccentTeal, fontWeight = FontWeight.Bold)
             }
@@ -233,4 +289,22 @@ fun SettingsDialog(
             TextButton(onClick = onDismiss) { Text("انصراف") }
         }
     )
+}
+
+@Composable
+private fun ProviderOption(selected: Boolean, onSelect: () -> Unit, title: String, subtitle: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() }
+            .padding(vertical = 4.dp)
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Spacer(Modifier.width(4.dp))
+        Column {
+            Text(title, fontWeight = FontWeight.Medium, fontSize = 13.5.sp)
+            Text(subtitle, fontSize = 11.sp, color = TextSecondary)
+        }
+    }
 }

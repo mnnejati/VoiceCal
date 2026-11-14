@@ -19,9 +19,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ir.appointment.voice.data.OnlineProvider
 import ir.appointment.voice.data.RecognitionMode
 import ir.appointment.voice.ui.components.PulsingMicIcon
 import ir.appointment.voice.ui.components.WaveformVisualizer
+import ir.appointment.voice.voice.ModelInfo
 import ir.appointment.voice.ui.theme.AccentTeal
 import ir.appointment.voice.ui.theme.DangerRed
 import ir.appointment.voice.ui.theme.DeepIndigo
@@ -49,6 +51,9 @@ fun RecordScreen(
     val userMessage by viewModel.userMessage.collectAsState()
     val recognitionMode by viewModel.recognitionMode.collectAsState()
     val apiKey by viewModel.apiKey.collectAsState()
+    val onlineProvider by viewModel.onlineProvider.collectAsState()
+    val geminiApiKey by viewModel.geminiApiKey.collectAsState()
+    val elevenLabsApiKey by viewModel.elevenLabsApiKey.collectAsState()
     val alarmSoundUri by viewModel.alarmSoundUri.collectAsState()
     val alarmDurationSeconds by viewModel.alarmDurationSeconds.collectAsState()
     val alarmEnabled by viewModel.alarmEnabled.collectAsState()
@@ -100,7 +105,7 @@ fun RecordScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = if (recognitionMode == RecognitionMode.ONLINE) "حالت: آنلاین (Groq)" else "حالت: آفلاین (Vosk)",
+                    text = if (recognitionMode == RecognitionMode.ONLINE) "حالت: آنلاین (${ModelInfo.providerShortName(onlineProvider)})" else "حالت: آفلاین (Vosk)",
                     color = Color.White.copy(alpha = 0.6f),
                     fontSize = 11.sp
                 )
@@ -229,7 +234,10 @@ fun RecordScreen(
     if (showSettings) {
         SettingsDialog(
             currentMode = recognitionMode,
+            currentProvider = onlineProvider,
             currentApiKey = apiKey,
+            currentGeminiKey = geminiApiKey,
+            currentElevenLabsKey = elevenLabsApiKey,
             currentAlarmEnabled = alarmEnabled,
             currentAlarmSoundUri = alarmSoundUri,
             currentAlarmDurationSeconds = alarmDurationSeconds,
@@ -239,8 +247,8 @@ fun RecordScreen(
             onRequestIgnoreBatteryOptimizations = onRequestIgnoreBatteryOptimizations,
             canScheduleExactAlarms = canScheduleExactAlarms,
             onRequestExactAlarmPermission = onRequestExactAlarmPermission,
-            onSave = { mode, key, enabled, soundUri, durationSeconds, leadMinutes ->
-                viewModel.updateSettings(mode, key)
+            onSave = { mode, provider, groqKey, geminiKey, elevenLabsKey, enabled, soundUri, durationSeconds, leadMinutes ->
+                viewModel.updateSettings(mode, provider, groqKey, geminiKey, elevenLabsKey)
                 viewModel.updateAlarmSettings(enabled, soundUri, durationSeconds, leadMinutes)
                 showSettings = false
             },

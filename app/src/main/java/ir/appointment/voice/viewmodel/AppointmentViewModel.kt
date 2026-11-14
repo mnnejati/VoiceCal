@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import ir.appointment.voice.data.AppDatabase
 import ir.appointment.voice.data.AppointmentEntity
 import ir.appointment.voice.data.AppointmentRepository
+import ir.appointment.voice.data.OnlineProvider
 import ir.appointment.voice.data.RecognitionMode
 import ir.appointment.voice.data.SettingsStore
 import ir.appointment.voice.notification.ReminderScheduler
@@ -15,7 +16,10 @@ import ir.appointment.voice.voice.AudioPlayerManager
 import ir.appointment.voice.voice.ExtractedAppointment
 import ir.appointment.voice.voice.OfflineVoskTranscriber
 import ir.appointment.voice.voice.GroqAppointmentExtractor
+import ir.appointment.voice.voice.ElevenLabsTranscriber
+import ir.appointment.voice.voice.GeminiTranscriber
 import ir.appointment.voice.voice.GroqWhisperTranscriber
+import ir.appointment.voice.voice.TranscriptionEngine
 import ir.appointment.voice.voice.PersianCalendar
 import ir.appointment.voice.voice.PersianInfoExtractor
 import ir.appointment.voice.voice.VoiceCaptureEngine
@@ -80,6 +84,15 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
     private val _apiKey = MutableStateFlow(settings.groqApiKey)
     val apiKey: StateFlow<String> = _apiKey
 
+    private val _onlineProvider = MutableStateFlow(settings.onlineProvider)
+    val onlineProvider: StateFlow<OnlineProvider> = _onlineProvider
+
+    private val _geminiApiKey = MutableStateFlow(settings.geminiApiKey)
+    val geminiApiKey: StateFlow<String> = _geminiApiKey
+
+    private val _elevenLabsApiKey = MutableStateFlow(settings.elevenLabsApiKey)
+    val elevenLabsApiKey: StateFlow<String> = _elevenLabsApiKey
+
     private val _alarmSoundUri = MutableStateFlow(settings.alarmSoundUri)
     val alarmSoundUri: StateFlow<String> = _alarmSoundUri
 
@@ -96,11 +109,23 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
 
     data class PendingPreview(val extracted: ExtractedAppointment, val audioFilePath: String)
 
-    fun updateSettings(mode: RecognitionMode, key: String) {
+    fun updateSettings(
+        mode: RecognitionMode,
+        provider: OnlineProvider,
+        groqKey: String,
+        geminiKey: String,
+        elevenLabsKey: String
+    ) {
         settings.recognitionMode = mode
-        settings.groqApiKey = key
+        settings.onlineProvider = provider
+        settings.groqApiKey = groqKey
+        settings.geminiApiKey = geminiKey
+        settings.elevenLabsApiKey = elevenLabsKey
         _recognitionMode.value = mode
-        _apiKey.value = key
+        _onlineProvider.value = provider
+        _apiKey.value = settings.groqApiKey
+        _geminiApiKey.value = settings.geminiApiKey
+        _elevenLabsApiKey.value = settings.elevenLabsApiKey
     }
 
     fun updateAlarmSettings(enabled: Boolean, soundUri: String, durationSeconds: Int, leadMinutes: Int) {
@@ -157,13 +182,28 @@ class AppointmentViewModel(application: Application) : AndroidViewModel(applicat
 
             val transcriptionResult = when (_recognitionMode.value) {
                 RecognitionMode.ONLINE -> {
-                    val key = _apiKey.value
+                    val provider = _onlineProvider.value
+                    val key = when (provider) {
+                        OnlineProvider.GROQ -> _apiKey.value
+                        OnlineProvider.GEMINI -> _geminiApiKey.value
+                        OnlineProvider.ELEVENLABS -> _elevenLabsApiKey.value
+                    }
                     if (key.isBlank()) {
                         _recordingState.value = RecordingState.IDLE
-                        _userMessage.value = UserMessage("ابتدا از تنظیمات، کلید API رایگان Groq را وارد کنید.")
+                        val providerName = when (provider) {
+                            OnlineProvider.GROQ -> "Groq"
+                            OnlineProvider.GEMINI -> "Gemini"
+                            OnlineProvider.ELEVENLABS -> "ElevenLabs"
+                        }
+                        _userMessage.value = UserMessage("ابتدا از تنظیمات، کلید API سرویس $providerName را وارد کنید.")
                         return@launch
                     }
-                    withContext(Dispatchers.IO) { GroqWhisperTranscriber(key).transcribe(audioPath) }
+                    val transcriber: TranscriptionEngine = when (provider) {
+                        OnlineProvider.GROQ -> GroqWhisperTranscriber(key)
+                        OnlineProvider.GEMINI -> GeminiTranscriber(key)
+                        OnlineProvider.ELEVENLABS -> ElevenLabsTranscriber(key)
+                    }
+                    withContext(Dispatchers.IO) { transcriber.transcribe(audioPath) }
                 }
                 RecognitionMode.OFFLINE -> {
                     val model = loadedOfflineModel ?: loadOfflineModelBlocking()

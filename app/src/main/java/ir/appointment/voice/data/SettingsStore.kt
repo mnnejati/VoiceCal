@@ -4,6 +4,11 @@ import android.content.Context
 
 enum class RecognitionMode { ONLINE, OFFLINE }
 
+/** Which online service performs speech-to-text when [RecognitionMode.ONLINE] is selected.
+ * (Smart info extraction from the transcript always uses Groq's LLM when a Groq key is set,
+ * regardless of this choice.) */
+enum class OnlineProvider { GROQ, GEMINI, ELEVENLABS }
+
 /**
  * NOTE on security: the API key is stored in plain SharedPreferences for
  * simplicity. This is adequate for a personal, single-user local app, but if
@@ -29,6 +34,27 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_API_KEY, "") ?: ""
         set(value) {
             prefs.edit().putString(KEY_API_KEY, value.trim()).apply()
+        }
+
+    /** Online speech-to-text service. Defaults to Groq, i.e. the pre-existing behavior. */
+    var onlineProvider: OnlineProvider
+        get() = runCatching {
+            OnlineProvider.valueOf(prefs.getString(KEY_ONLINE_PROVIDER, OnlineProvider.GROQ.name) ?: OnlineProvider.GROQ.name)
+        }.getOrDefault(OnlineProvider.GROQ)
+        set(value) {
+            prefs.edit().putString(KEY_ONLINE_PROVIDER, value.name).apply()
+        }
+
+    var geminiApiKey: String
+        get() = prefs.getString(KEY_GEMINI_API_KEY, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_GEMINI_API_KEY, value.trim()).apply()
+        }
+
+    var elevenLabsApiKey: String
+        get() = prefs.getString(KEY_ELEVENLABS_API_KEY, "") ?: ""
+        set(value) {
+            prefs.edit().putString(KEY_ELEVENLABS_API_KEY, value.trim()).apply()
         }
 
     /** Empty string means "use the system default alarm sound". */
@@ -62,6 +88,9 @@ class SettingsStore(context: Context) {
     companion object {
         private const val KEY_MODE = "recognition_mode"
         private const val KEY_API_KEY = "groq_api_key"
+        private const val KEY_ONLINE_PROVIDER = "online_provider"
+        private const val KEY_GEMINI_API_KEY = "gemini_api_key"
+        private const val KEY_ELEVENLABS_API_KEY = "elevenlabs_api_key"
         private const val KEY_ALARM_SOUND = "alarm_sound_uri"
         private const val KEY_ALARM_DURATION = "alarm_duration_seconds"
         private const val KEY_ALARM_ENABLED = "alarm_enabled"
